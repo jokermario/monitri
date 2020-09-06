@@ -9,15 +9,16 @@ import (
 	"github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/go-ozzo/ozzo-routing/v2/content"
 	"github.com/go-ozzo/ozzo-routing/v2/cors"
+	"github.com/gomodule/redigo/redis"
+	"github.com/jokermario/monitri/internal/accounts"
+	"github.com/jokermario/monitri/internal/config"
+	"github.com/jokermario/monitri/internal/email"
+	"github.com/jokermario/monitri/internal/errors"
+	"github.com/jokermario/monitri/internal/healthcheck"
+	"github.com/jokermario/monitri/pkg/accesslog"
+	"github.com/jokermario/monitri/pkg/dbcontext"
+	"github.com/jokermario/monitri/pkg/log"
 	_ "github.com/lib/pq"
-	"github.com/qiangxue/go-rest-api/internal/album"
-	"github.com/qiangxue/go-rest-api/internal/auth"
-	"github.com/qiangxue/go-rest-api/internal/config"
-	"github.com/qiangxue/go-rest-api/internal/errors"
-	"github.com/qiangxue/go-rest-api/internal/healthcheck"
-	"github.com/qiangxue/go-rest-api/pkg/accesslog"
-	"github.com/qiangxue/go-rest-api/pkg/dbcontext"
-	"github.com/qiangxue/go-rest-api/pkg/log"
 	"net/http"
 	"os"
 	"time"
@@ -40,6 +41,15 @@ func main() {
 		os.Exit(-1)
 	}
 
+	//connect to redis
+	redisConn := redisConnPool(cfg.RedisDSN).Get()
+	log.New().Infof(cfg.RedisDSN)
+	defer func() {
+		if err := redisConn.Close(); err != nil {
+			logger.Error(err)
+		}
+	}()
+
 	// connect to the database
 	db, err := dbx.MustOpen("postgres", cfg.DSN)
 	if err != nil {
@@ -58,7 +68,7 @@ func main() {
 	address := fmt.Sprintf(":%v", cfg.ServerPort)
 	hs := &http.Server{
 		Addr:    address,
-		Handler: buildHandler(logger, dbcontext.New(db), cfg),
+		Handler: buildHandler(logger, dbcontext.New(db), cfg, redisConn),
 	}
 
 	// start the HTTP server with graceful shutdown
@@ -71,7 +81,7 @@ func main() {
 }
 
 // buildHandler sets up the HTTP routing and builds an HTTP handler.
-func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config) http.Handler {
+func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redisConn redis.Conn) http.Handler {
 	router := routing.New()
 
 	router.Use(
@@ -85,17 +95,29 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config) http.
 
 	rg := router.Group("/v1")
 
-	authHandler := auth.Handler(cfg.JWTSigningKey)
+	//authHandler := auth.Handler(cfg.JWTSigningKey)
+	//
+	//album.RegisterHandlers(rg.Group(""),
+	//	album.NewService(album.NewRepository(db, logger), logger),
+	//	authHandler, logger,
+	//)
+	accounts.RegisterHandlers(rg.Group(""),
+		accounts.NewService(
+			accounts.NewRepository(
+				db,
+				logger),
+			logger,
+			email.NewService(logger, cfg.SendGridApiKey),
+			cfg.AccessTokenSigningKey,
+			cfg.RefreshTokenSigningKey,
+			cfg.AccessTokenExpiration,
+			cfg.RefreshTokenExpiration),
+		cfg.AccessTokenSigningKey, logger, redisConn)
 
-	album.RegisterHandlers(rg.Group(""),
-		album.NewService(album.NewRepository(db, logger), logger),
-		authHandler, logger,
-	)
-
-	auth.RegisterHandlers(rg.Group(""),
-		auth.NewService(cfg.JWTSigningKey, cfg.JWTExpiration, logger),
-		logger,
-	)
+	//auth.RegisterHandlers(rg.Group(""),
+	//	auth.NewService(cfg.JWTSigningKey, cfg.JWTExpiration, logger, accounts.NewRepository(db, logger), email.NewService(logger, cfg.SendGridApiKey)),
+	//	logger,
+	//)
 
 	return router
 }
@@ -119,5 +141,23 @@ func logDBExec(logger log.Logger) dbx.ExecLogFunc {
 		} else {
 			logger.With(ctx, "sql", sql).Errorf("DB execution error: %v", err)
 		}
+	}
+}
+
+//redisConnPool returns a redis conn instance to be used
+func redisConnPool(redisDSN string) *redis.Pool{
+	return &redis.Pool{
+		//Maximum number of idle connections int he pool
+		MaxIdle: 80,
+		//Maximum number of connections
+		MaxActive: 12000,
+		//Dial is an application supplied function for creating and configuring a connection
+		Dial: func() (redis.Conn, error) {
+			conn, err := redis.Dial("tcp", redisDSN)
+			if err != nil {
+				panic(err.Error())
+			}
+			return conn, err
+		},
 	}
 }

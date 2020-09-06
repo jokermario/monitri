@@ -50,7 +50,7 @@ jobs:
 
       - name: Test
         env:
-          APP_DSN: postgres://127.0.0.1:${{ job.services.postgres.ports[5432] }}/go_restful?sslmode=disable&user=postgres&password=postgres
+          APP_DSN: postgres://127.0.0.1:${{ job.services.postgres.ports[5432] }}/go_restful?sslmode=disable&accounts=postgres&password=postgres
         run: |
           make migrate
           make test-cover

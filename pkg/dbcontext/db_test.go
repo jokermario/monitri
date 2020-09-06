@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-const DSN = "postgres://127.0.0.1/go_restful?sslmode=disable&user=postgres&password=postgres"
+const DSN = "postgres://127.0.0.1/go_restful?sslmode=disable&accounts=postgres&password=postgres"
 
 func TestNew(t *testing.T) {
 	runDBTest(t, func(db *dbx.DB) {

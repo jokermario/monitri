@@ -3,14 +3,15 @@ package config
 import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/qiangxue/go-env"
-	"github.com/qiangxue/go-rest-api/pkg/log"
+	"github.com/jokermario/monitri/pkg/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 )
 
 const (
 	defaultServerPort         = 8080
-	defaultJWTExpirationHours = 72
+	defaultAccessExpirationHours = 1
+	defaultRefreshExpirationHours = 72
 )
 
 // Config represents an application configuration.
@@ -19,17 +20,26 @@ type Config struct {
 	ServerPort int `yaml:"server_port" env:"SERVER_PORT"`
 	// the data source name (DSN) for connecting to the database. required.
 	DSN string `yaml:"dsn" env:"DSN,secret"`
-	// JWT signing key. required.
-	JWTSigningKey string `yaml:"jwt_signing_key" env:"JWT_SIGNING_KEY,secret"`
-	// JWT expiration in hours. Defaults to 72 hours (3 days)
-	JWTExpiration int `yaml:"jwt_expiration" env:"JWT_EXPIRATION"`
+	// JWT access token signing key. required.
+	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
+	// JWT refresh token signing key. required.
+	RefreshTokenSigningKey string `yaml:"jwt_refresh_token_signing_key" env:"JWT_REFRESH_TOKEN_SIGNING_KEY,secret"`
+	// JWT access token expiration in hours. Defaults to 5 hours
+	AccessTokenExpiration int `yaml:"access_token_expiration" env:"JWT_EXPIRATION"`
+	// JWT refresh token expiration in hours. Defaults to 72 hours (3 days)
+	RefreshTokenExpiration int `yaml:"refresh_token_expiration" env:"JWT_EXPIRATION"`
+	//Sendgrid Api Key
+	SendGridApiKey string `yaml:"sendgrid_api_key" env:"SENDGRID_API_KEY"`
+	//the data source name for connecting to redis
+	RedisDSN string `yaml:"redis_dsn" env:"REDIS_DSN"`
 }
 
 // Validate validates the application configuration.
 func (c Config) Validate() error {
 	return validation.ValidateStruct(&c,
 		validation.Field(&c.DSN, validation.Required),
-		validation.Field(&c.JWTSigningKey, validation.Required),
+		validation.Field(&c.AccessTokenSigningKey, validation.Required),
+		validation.Field(&c.RefreshTokenSigningKey, validation.Required),
 	)
 }
 
@@ -38,7 +48,8 @@ func Load(file string, logger log.Logger) (*Config, error) {
 	// default config
 	c := Config{
 		ServerPort:    defaultServerPort,
-		JWTExpiration: defaultJWTExpirationHours,
+		AccessTokenExpiration: defaultAccessExpirationHours,
+		RefreshTokenExpiration: defaultRefreshExpirationHours,
 	}
 
 	// load from YAML config file

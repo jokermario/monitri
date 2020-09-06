@@ -1,9 +1,9 @@
 # Go RESTful API Starter Kit (Boilerplate)
 
-[![GoDoc](https://godoc.org/github.com/qiangxue/go-rest-api?status.png)](http://godoc.org/github.com/qiangxue/go-rest-api)
-[![Build Status](https://github.com/qiangxue/go-rest-api/workflows/build/badge.svg)](https://github.com/qiangxue/go-rest-api/actions?query=workflow%3Abuild)
+[![GoDoc](https://godoc.org/github.com/jokermario/monitri?status.png)](http://godoc.org/github.com/jokermario/monitri)
+[![Build Status](https://github.com/jokermario/monitri/workflows/build/badge.svg)](https://github.com/jokermario/monitri/actions?query=workflow%3Abuild)
 [![Code Coverage](https://codecov.io/gh/qiangxue/go-rest-api/branch/master/graph/badge.svg)](https://codecov.io/gh/qiangxue/go-rest-api)
-[![Go Report](https://goreportcard.com/badge/github.com/qiangxue/go-rest-api)](https://goreportcard.com/report/github.com/qiangxue/go-rest-api)
+[![Go Report](https://goreportcard.com/badge/github.com/jokermario/monitri)](https://goreportcard.com/report/github.com/jokermario/monitri)
 
 This starter kit is designed to get you up and running with a project structure optimized for developing
 RESTful API services in Go. It promotes the best practices that follow the [SOLID principles](https://en.wikipedia.org/wiki/SOLID)
@@ -45,7 +45,7 @@ After installing Go and Docker, run the following commands to start experiencing
 
 ```shell
 # download the starter kit
-git clone https://github.com/qiangxue/go-rest-api.git
+git clone https://github.com/jokermario/monitri.git
 
 cd go-rest-api
 
@@ -89,7 +89,7 @@ curl -X GET -H "Authorization: Bearer ...JWT token here..." http://localhost:808
 ```
 
 To use the starter kit as a starting point of a real project whose package name is `github.com/abc/xyz`, do a global 
-replacement of the string `github.com/qiangxue/go-rest-api` in all of project files with the string `github.com/abc/xyz`.
+replacement of the string `github.com/jokermario/monitri` in all of project files with the string `github.com/abc/xyz`.
 
 
 ## Project Layout

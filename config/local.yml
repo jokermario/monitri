@@ -1,2 +1,5 @@
-dsn: "postgres://127.0.0.1/go_restful?sslmode=disable&user=postgres&password=postgres"
-jwt_signing_key: "LxsKJywDL5O5PvgODZhBH12KE6k2yL8E"
+dsn: "postgres://127.0.0.1/monitridb?sslmode=disable&user=postgres&password=joker"
+jwt_access_token_signing_key: "LxsKJywDL5O5PvgODZhBH12KE6k2yL8E"
+jwt_refresh_token_signing_key: "ODZhBH12KE6k2yL8ELxsKJywDL5O5Pvg"
+sendgrid_api_key: "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"
+redis_dsn: "localhost:6379"

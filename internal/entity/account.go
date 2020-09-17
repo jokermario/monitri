@@ -1,9 +1,14 @@
 package entity
 
-import "time"
+import (
+	"time"
+)
 
 // Accounts represents an account.
 type Accounts struct {
+	AccessUUID         string    `db:"-"`
+	RefreshUUID        string    `db:"-"`
+	RefreshToken       string    `db:"-"`
 	Sn                 int       `json:"sn"`
 	Id                 string    `json:"id"`
 	Firstname          string    `json:"firstname"`
@@ -17,8 +22,8 @@ type Accounts struct {
 	Bankname           string    `json:"bankname"`
 	BankAccountNo      string    `json:"bank_account_no"`
 	ConfirmedEmail     int       `json:"confirmed_email"`
-	ConfirmEmailToken  int       `json:"confirm_email_token"`
-	ConfirmEmailExpiry int       `json:"confirm_email_expiry"`
+	ConfirmEmailToken  int      `json:"confirm_email_token"`
+	ConfirmEmailExpiry int64     `json:"confirm_email_expiry"`
 	ConfirmedPhone     int       `json:"confirmed_phone"`
 	ConfirmPhoneToken  int       `json:"confirm_phone_token"`
 	ConfirmPhoneExpiry int       `json:"confirm_phone_expiry"`
@@ -26,6 +31,18 @@ type Accounts struct {
 	AccountManagerId   string    `json:"account_manager_id"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+func (a Accounts) GetAccessID() string {
+	return a.AccessUUID
+}
+
+func (a Accounts) GetRefreshID() string {
+	return a.RefreshUUID
+}
+
+func (a Accounts) GetRefreshToken() string {
+	return a.RefreshToken
 }
 
 // GetID returns the accounts ID.

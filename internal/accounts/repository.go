@@ -20,6 +20,7 @@ type Repository interface {
 	GetAccountByEmail(ctx context.Context, email string) (entity.Accounts, error)
 	SetRedisKey(conn redis.Conn, exp int64, key, value string) error
 	GetRedisKey(conn redis.Conn, key string) (string, error)
+	DeleteRedisKeys(conn redis.Conn, keys ...string) error
 }
 
 type repository struct {
@@ -89,6 +90,13 @@ func (r repository) SetRedisKey(conn redis.Conn, exp int64, key, value string) e
 func (r repository) GetRedisKey(conn redis.Conn, key string) (string, error) {
 	s, err := redis.String(conn.Do("GET", key))
 	return s, err
+}
+
+func (r repository) DeleteRedisKeys(conn redis.Conn, keys ...string) error {
+	for _, v := range keys {
+		_, _ = redis.String(conn.Do("DEL", v))
+	}
+	return nil
 }
 
 

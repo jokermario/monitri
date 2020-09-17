@@ -1,7 +1,9 @@
 package accounts
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -11,7 +13,11 @@ import (
 	"github.com/jokermario/monitri/internal/errors"
 	"github.com/jokermario/monitri/pkg/log"
 	"golang.org/x/crypto/bcrypt"
+	"html/template"
+	"io/ioutil"
+	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,13 +30,24 @@ type Service interface {
 	DeleteById(ctx context.Context, id string) error
 	GetAccounts(ctx context.Context, offset, limit int) ([]Account, error)
 	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error)
-	CreateAccount(ctx context.Context, req CreateAccountsRequest) (*TokenDetails, error)
-	storeAuthTokens(conn redis.Conn, email string, td *TokenDetails) error
-	//GetCurrentUser(ctx context.Context) string
+	CreateAccount(ctx context.Context, req CreateAccountsRequest) error
+	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
+	checkAuthKeyIfExist(conn redis.Conn, key string) (string, error)
+	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
+	generateTokens(identity Identity) (*TokenDetails, error)
+	getAccountIdEmailPhone(ctx context.Context, id string) Identity
+	refreshToken(identity Identity, redisConn redis.Conn, key string, tokenDetails *TokenDetails) (*TokenDetails, error)
+	generateAndSendEmailVerificationToken(ctx context.Context, receiverEmail string) error
+	verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool)
+	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
 }
+
+const senderEmail string = "healer800@gmail.com"
 
 // Identity represents an authenticated accounts identity.
 type Identity interface {
+	GetAccessID() string
+	GetRefreshID() string
 	GetID() string
 	GetEmail() string
 	GetPhone() string
@@ -51,7 +68,7 @@ type Account struct {
 }
 
 type TokenDetails struct {
-	AccessToken string
+	AccessToken  string
 	RefreshToken string
 	AccessUuid   string
 	RefreshUuid  string
@@ -84,18 +101,20 @@ func (car CreateAccountsRequest) validate() error {
 }
 
 type UpdateAccountRequest struct {
-	Firstname        string `json:"firstname"`
-	Middlename       string `json:"middlename"`
-	Lastname         string `json:"lastname"`
-	Dob              string `json:"dob"`
-	Password         string `json:"password"`
-	Address          string `json:"address"`
-	Bankname         string `json:"bankname"`
-	BankAccountNo    string `json:"bank_account_no"`
-	ConfirmedEmail   int    `json:"confirmed_email"`
-	ConfirmedPhone   int    `json:"confirmed_phone"`
-	Managed          int    `json:"managed"`
-	AccountManagerId string `json:"account_manager_id"`
+	Firstname          string `json:"firstname"`
+	Middlename         string `json:"middlename"`
+	Lastname           string `json:"lastname"`
+	Dob                string `json:"dob"`
+	Password           string `json:"password"`
+	Address            string `json:"address"`
+	Bankname           string `json:"bankname"`
+	BankAccountNo      string `json:"bank_account_no"`
+	ConfirmedEmail     int    `json:"confirmed_email"`
+	ConfirmEmailToken  *big.Int
+	ConfirmEmailExpiry int64
+	ConfirmedPhone     int    `json:"confirmed_phone"`
+	Managed            int    `json:"managed"`
+	AccountManagerId   string `json:"account_manager_id"`
 }
 
 func (uar UpdateAccountRequest) validate() error {
@@ -103,7 +122,8 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.Firstname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Middlename, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Lastname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-		validation.Field(&uar.Dob, validation.Match(regexp.MustCompile("^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$"))),
+		validation.Field(&uar.Dob, validation.
+			Match(regexp.MustCompile("^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$"))),
 		validation.Field(&uar.Password, validation.Length(8, 0)),
 		validation.Field(&uar.Address, is.Alphanumeric),
 		validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
@@ -114,8 +134,11 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
 }
 
-func NewService(repo Repository, logger log.Logger, email email.Service, AccessTokenSigningKey, RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
-	return service{repo, logger, email, AccessTokenSigningKey, RefreshTokenSigningKey, AccessTokenExpiration, RefreshTokenExpiration}
+func NewService(repo Repository, logger log.Logger, email email.Service, AccessTokenSigningKey,
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
+	return service{repo, logger, email, AccessTokenSigningKey,
+		RefreshTokenSigningKey, AccessTokenExpiration,
+		RefreshTokenExpiration}
 }
 
 func (s service) GetById(ctx context.Context, id string) (Account, error) {
@@ -203,7 +226,8 @@ func (s service) authenticate(ctx context.Context, email, password string) Ident
 
 	account, err := s.repo.GetAccountByEmail(ctx, email)
 	if err != nil {
-		logger.Errorf("an error occurred while trying to get the account with the email: %s\n The error is: %s", email, err)
+		logger.Errorf("an error occurred while trying to get the account with the email: %s\n "+
+			"The error is: %s", email, err)
 		return nil
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password)); err != nil {
@@ -220,7 +244,30 @@ func (s service) authenticate(ctx context.Context, email, password string) Ident
 	return account
 }
 
-func (s service) getAccount(ctx context.Context, id string) Identity {
+func (s service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string) {
+	logger := s.logger.With(ctx, "accounts", email)
+	t, _ := template.ParseFiles("internal/email/loginNotificationEmailTemplate.gohtml")
+	var body bytes.Buffer
+	_ = t.Execute(&body, struct {
+		Email     string
+		Time      string
+		IpAddress string
+		Device    string
+	}{
+		Email:     email,
+		Time:      time,
+		IpAddress: ipaddress,
+		Device:    device,
+	})
+	contentToString := string(body.Bytes())
+	_, err := s.emailService.SendEmail(senderEmail, email, "Sign-in Notification", "plain text",
+		contentToString)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to send login notif email. The error %s", err)
+	}
+}
+
+func (s service) getAccountIdEmailPhone(ctx context.Context, id string) Identity {
 	accountInfo, err := s.repo.GetIdEmailPhone(ctx, id)
 	if err != nil {
 		return nil
@@ -228,31 +275,37 @@ func (s service) getAccount(ctx context.Context, id string) Identity {
 	return entity.Accounts{Id: accountInfo.Id, Email: accountInfo.Email, Phone: accountInfo.Phone}
 }
 
-func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) (*TokenDetails, error) {
+func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) error {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
-		return nil, err
+		return err
 	}
 	id := entity.GenerateID()
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 
+	// FIXME I knowingly didn't check for already existing email coz i'm relying on sql uniqueness in DB
 	err := s.repo.Create(ctx, entity.Accounts{
 		Id:       strings.TrimSpace(id),
 		Email:    strings.TrimSpace(req.Email),
-		Phone:    req.Phone,
+		Phone:    strings.TrimSpace(req.Phone),
 		Password: string(hashedPass),
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	resp, emailErr := s.emailService.SendEmail("healer800@gmail.com", "flexikiid007@gmail.com", "Testing this email sending from Golang", "plain text", "<p><strong>The Message!!</strong>Not bold</p>")
+	content, _ := ioutil.ReadFile("internal/email/accountCreationEmailTemplate.gohtml")
+	contentToString := string(content)
+	resp, emailErr := s.emailService.SendEmail(senderEmail, req.Email,
+		"Welcome to Monitri", "plain text", contentToString)
 	if emailErr != nil {
-		s.logger.Errorf("an error occurred while trying to send email.\nThe error: %s\nResponseBody: %s\nResponseCode: %s", err, resp.Body, resp.StatusCode)
-		return nil, emailErr
+		s.logger.Errorf("an error occurred while trying to send email.\nThe error: %s\nResponseBody: %s\n"+
+			"ResponseCode: %s", err, resp.Body, resp.StatusCode)
+		return emailErr
 	}
 
-	logger.Infof("account created successfully. Email sending response body: %s, response code: %s", resp.Body, resp.StatusCode)
-	return s.generateTokens(s.getAccount(ctx, id))
+	logger.Infof("account created successfully. Email sending response body: %s, response code: %s", resp.Body,
+		resp.StatusCode)
+	return nil
 }
 
 func (s service) generateTokens(identity Identity) (*TokenDetails, error) {
@@ -272,8 +325,32 @@ func (s service) generateTokens(identity Identity) (*TokenDetails, error) {
 	if referr != nil {
 		return nil, referr
 	}
+	return td, nil
+}
 
-	log.New().Infof("here")
+func (s service) refreshToken(identity Identity, redisConn redis.Conn,
+	key string, tokenDetails *TokenDetails) (*TokenDetails, error) {
+	td := &TokenDetails{}
+	var accerr error
+	var referr error
+	td.AtExpires = time.Now().Add(time.Duration(s.AccessTokenExpiration) * time.Hour).Unix()
+	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
+	td.AccessUuid = tokenDetails.AccessUuid
+	td.RefreshUuid = tokenDetails.RefreshUuid
+
+	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUuid, td.AtExpires)
+	if accerr != nil {
+		return nil, accerr
+	}
+	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUuid, td.RtExpires)
+	if referr != nil {
+		return nil, referr
+	}
+
+	redisErr := s.storeAuthKeys(redisConn, key, tokenDetails)
+	if redisErr != nil {
+		return nil, redisErr
+	}
 	return td, nil
 }
 
@@ -295,25 +372,103 @@ func (s service) generateRefreshToken(identity Identity, tokenUUID string, expir
 		"refreshUUID": tokenUUID,
 		"userId":      identity.GetID(),
 		"email":       identity.GetEmail(),
-		"phone":       identity.GetPhone(),
 		"exp":         expiryTime,
 	}).SignedString([]byte(s.RefreshTokenSigningKey))
 }
 
+func (s service) generateAndSendEmailVerificationToken(ctx context.Context, receiverEmail string) error {
+	logger := s.logger.With(ctx, "account", receiverEmail)
+	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
+	t, _ := template.ParseFiles("internal/email/emailVerificationTokenTemplate.gohtml")
+	var body bytes.Buffer
+	_ = t.Execute(&body, struct {
+		Token *big.Int
+	}{
+		Token: RandomCrypto,
+	})
+	account, err := s.GetAccountByEmail(ctx, receiverEmail)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
+		return err
+	}
+	account.ConfirmEmailToken = int(RandomCrypto.Int64())
+	account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
+
+	updateErr := s.repo.Update(ctx, account.Accounts)
+	if updateErr != nil {
+		logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+			"The error: %s, updateErr")
+		return updateErr
+	}
+	contentToString := string(body.Bytes())
+	resp, sendmailErr := s.emailService.SendEmail(senderEmail, receiverEmail, "Email verification",
+		"plain text",
+		contentToString)
+	if sendmailErr != nil {
+		logger.Errorf("an error occurred while trying to send email.\nThe error: %s\nResponseBody: %s\n"+
+			"ResponseCode: %s", sendmailErr, resp.Body, resp.StatusCode)
+		return sendmailErr
+	}
+	return nil
+}
+
+func (s service) verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool) {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.GetById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s, err")
+		return err, false
+	}
+	tokenExpiry := time.Unix(acc.ConfirmEmailExpiry, 0)
+	now := time.Now()
+
+	if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
+		logger.Errorf("email token expired")
+		return nil, false
+	}
+
+	i, _ := strconv.Atoi(token)
+
+	if i != acc.ConfirmEmailToken {
+		return nil, false
+	}
+
+	acc.ConfirmedEmail = 1
+	updateErr := s.repo.Update(ctx, acc.Accounts)
+	if updateErr != nil {
+		logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n" +
+			"The error: %s, err")
+	}
+
+	return nil, true
+}
+
 //redis
-func (s service) storeAuthTokens(conn redis.Conn, email string, td *TokenDetails) error {
+func (s service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0) //converting unix to UTC(to time object)
 	rt := time.Unix(td.RtExpires, 0)
-	log.New().Infof("rt = %s", rt)
 	now := time.Now()
-	log.New().Infof("now = %s", now)
 
-	errAccess := s.repo.SetRedisKey(conn, int64(at.Sub(now).Seconds()), email, td.AccessToken); if errAccess != nil {
+	errAccess := s.repo.SetRedisKey(conn, int64(at.Sub(now).Seconds()), td.AccessUuid, email)
+	if errAccess != nil {
 		return errAccess
 	}
-	errRefresh := s.repo.SetRedisKey(conn, int64(rt.Sub(now).Seconds()), email, td.RefreshToken); if errRefresh != nil {
+	errRefresh := s.repo.SetRedisKey(conn, int64(rt.Sub(now).Seconds()), td.RefreshUuid, email)
+	if errRefresh != nil {
 		return errRefresh
 	}
-	log.New().Infof("sub = %s", int64(rt.Sub(now).Seconds()))
+	return nil
+}
+
+func (s service) checkAuthKeyIfExist(conn redis.Conn, key string) (string, error) {
+	val, err := s.repo.GetRedisKey(conn, key)
+	return val, err
+}
+
+func (s service) logOut(ctx context.Context, conn redis.Conn, keys ...string) error {
+	logger := s.logger.With(ctx, "accessUUID", keys)
+	_ = s.repo.DeleteRedisKeys(conn, keys...)
+	logger.Infof("deleted redis key %s", keys)
+
 	return nil
 }

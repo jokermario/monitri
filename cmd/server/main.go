@@ -112,7 +112,7 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 			cfg.RefreshTokenSigningKey,
 			cfg.AccessTokenExpiration,
 			cfg.RefreshTokenExpiration),
-		cfg.AccessTokenSigningKey, logger, redisConn)
+		cfg.AccessTokenSigningKey, cfg.RefreshTokenSigningKey, logger, redisConn)
 
 	//auth.RegisterHandlers(rg.Group(""),
 	//	auth.NewService(cfg.JWTSigningKey, cfg.JWTExpiration, logger, accounts.NewRepository(db, logger), email.NewService(logger, cfg.SendGridApiKey)),

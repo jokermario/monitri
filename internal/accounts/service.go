@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -16,6 +17,8 @@ import (
 	"html/template"
 	"io/ioutil"
 	"math/big"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,6 +28,7 @@ import (
 type Service interface {
 	GetById(ctx context.Context, id string) (Account, error)
 	GetAccountByEmail(ctx context.Context, email string) (Account, error)
+	GetAccountByPhone(ctx context.Context, phone string) (Account, error)
 	Count(ctx context.Context) (int, error)
 	UpdateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error)
 	DeleteById(ctx context.Context, id string) error
@@ -40,9 +44,11 @@ type Service interface {
 	generateAndSendEmailVerificationToken(ctx context.Context, receiverEmail string) error
 	verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
+	generateAndSendPhoneVerificationToken(ctx context.Context, receiverPhone string) error
 }
 
 const senderEmail string = "healer800@gmail.com"
+const phoneVerificationUsername string = "phoneVeriNotif"
 
 // Identity represents an authenticated accounts identity.
 type Identity interface {
@@ -61,6 +67,7 @@ type service struct {
 	RefreshTokenSigningKey string
 	AccessTokenExpiration  int
 	RefreshTokenExpiration int
+	SMSApiUrl              string
 }
 
 type Account struct {
@@ -135,10 +142,10 @@ func (uar UpdateAccountRequest) validate() error {
 }
 
 func NewService(repo Repository, logger log.Logger, email email.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, SMSApiUrl string) Service {
 	return service{repo, logger, email, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration}
+		RefreshTokenExpiration, SMSApiUrl}
 }
 
 func (s service) GetById(ctx context.Context, id string) (Account, error) {
@@ -151,6 +158,14 @@ func (s service) GetById(ctx context.Context, id string) (Account, error) {
 
 func (s service) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
 	account, err := s.repo.GetAccountByEmail(ctx, email)
+	if err != nil {
+		return Account{}, err
+	}
+	return Account{account}, err
+}
+
+func (s service) GetAccountByPhone(ctx context.Context, phone string) (Account, error) {
+	account, err := s.repo.GetAccountByPhone(ctx, phone)
 	if err != nil {
 		return Account{}, err
 	}
@@ -260,7 +275,7 @@ func (s service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress
 		Device:    device,
 	})
 	contentToString := string(body.Bytes())
-	_, err := s.emailService.SendEmail(senderEmail, email, "Sign-in Notification", "plain text",
+	err := s.emailService.SendEmail(senderEmail, email, "Sign-in Notification", "plain text",
 		contentToString)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to send login notif email. The error %s", err)
@@ -295,16 +310,14 @@ func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) e
 	}
 	content, _ := ioutil.ReadFile("internal/email/accountCreationEmailTemplate.gohtml")
 	contentToString := string(content)
-	resp, emailErr := s.emailService.SendEmail(senderEmail, req.Email,
+	emailErr := s.emailService.SendEmail(senderEmail, req.Email,
 		"Welcome to Monitri", "plain text", contentToString)
 	if emailErr != nil {
-		s.logger.Errorf("an error occurred while trying to send email.\nThe error: %s\nResponseBody: %s\n"+
-			"ResponseCode: %s", err, resp.Body, resp.StatusCode)
+		s.logger.Errorf("an error occurred while trying to send email.\nThe error: %s", err)
 		return emailErr
 	}
 
-	logger.Infof("account created successfully. Email sending response body: %s, response code: %s", resp.Body,
-		resp.StatusCode)
+	logger.Infof("account created successfully")
 	return nil
 }
 
@@ -401,15 +414,79 @@ func (s service) generateAndSendEmailVerificationToken(ctx context.Context, rece
 		return updateErr
 	}
 	contentToString := string(body.Bytes())
-	resp, sendmailErr := s.emailService.SendEmail(senderEmail, receiverEmail, "Email verification",
+	sendmailErr := s.emailService.SendEmail(senderEmail, receiverEmail, "Email verification",
 		"plain text",
 		contentToString)
 	if sendmailErr != nil {
-		logger.Errorf("an error occurred while trying to send email.\nThe error: %s\nResponseBody: %s\n"+
-			"ResponseCode: %s", sendmailErr, resp.Body, resp.StatusCode)
+		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
 		return sendmailErr
 	}
 	return nil
+}
+
+func (s service) generateAndSendPhoneVerificationToken(ctx context.Context, receiverPhone string) error {
+	logger := s.logger.With(ctx, "account", receiverPhone)
+	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
+	account, err := s.GetAccountByPhone(ctx, receiverPhone)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to get account by phone.\nThe error: %s", err)
+		return err
+	}
+	account.ConfirmPhoneToken = int(RandomCrypto.Int64())
+	account.ConfirmPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
+	updateErr := s.repo.Update(ctx, account.Accounts)
+	if updateErr != nil {
+		logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+			"The error: %s", updateErr)
+		return updateErr
+	}
+	tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
+	_, ok := s.sendTokenToMobile(receiverPhone, "Your verification token is "+tokenToString+
+		". it expires in 10 minutes", logger)
+	if !ok {
+		logger.Errorf("an error occurred while trying to send token to mobile")
+		return nil
+	}
+	return nil
+}
+
+func (s service) sendTokenToMobile(to, message string, logger log.Logger) (error, bool) {
+	apiUrl := s.SMSApiUrl
+	data := url.Values{}
+	data.Set("username", phoneVerificationUsername)
+	data.Set("to", to)
+	data.Set("message", message)
+
+	u, _ := url.ParseRequestURI(apiUrl)
+	urlToString := u.String()
+
+	req, _ := http.NewRequest(http.MethodPost, urlToString, strings.NewReader(data.Encode()))
+	req.Header.Add( "apiKey", "5c8d05934f4fb3e1d625100636d20aa2dc148aebc3c04c0f8f44d5f8cc2a7e1c" )
+	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded; charset=UTF-8" )
+	req.Header.Add( "Accept", "application/json; charset=UTF-8" )
+	req.Header.Add( "Idempotency-Key", "382c5625" )
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Errorf("Error:", err)
+	}
+
+	if resp.StatusCode == 201 {
+		// read response body
+		dataa, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		var jsonData map[string]interface{}
+		_ = json.Unmarshal(dataa, &jsonData)
+		//todo i have a panic error  here with these interface stuff
+		var f []interface{}
+		for _, val := range jsonData["SMSMessageData"].(map[string]interface{}) {
+			f = append(f, val)
+		}
+		if len(f) >= 2 && f[1].(map[string]interface{})["statusCode"] == 101 {
+			return nil, true
+		}
+	}
+	return nil, false
 }
 
 func (s service) verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool) {

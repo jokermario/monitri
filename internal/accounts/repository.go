@@ -11,13 +11,14 @@ import (
 
 type Repository interface {
 	GetById(ctx context.Context, id string) (entity.Accounts, error)
+	GetIdEmailPhone(ctx context.Context, id string) (entity.Accounts, error)
+	GetAccountByEmail(ctx context.Context, email string) (entity.Accounts, error)
+	GetAccountByPhone(ctx context.Context, phone string) (entity.Accounts, error)
 	Create(ctx context.Context, account entity.Accounts) error
 	Count(ctx context.Context) (int, error)
 	Update(ctx context.Context, accounts entity.Accounts) error
 	Delete(ctx context.Context, id string) error
 	GetAccounts(ctx context.Context, offset, limit int) ([]entity.Accounts, error)
-	GetIdEmailPhone(ctx context.Context, id string) (entity.Accounts, error)
-	GetAccountByEmail(ctx context.Context, email string) (entity.Accounts, error)
 	SetRedisKey(conn redis.Conn, exp int64, key, value string) error
 	GetRedisKey(conn redis.Conn, key string) (string, error)
 	DeleteRedisKeys(conn redis.Conn, keys ...string) error
@@ -47,6 +48,12 @@ func (r repository) GetIdEmailPhone(ctx context.Context, id string) (entity.Acco
 func (r repository) GetAccountByEmail(ctx context.Context, email string) (entity.Accounts, error) {
 	var account entity.Accounts
 	err := r.db.With(ctx).Select().From("accounts").Where(dbx.NewExp("email={:email}", dbx.Params{"email":email})).One(&account)
+	return account, err
+}
+
+func (r repository) GetAccountByPhone(ctx context.Context, phone string) (entity.Accounts, error) {
+	var account entity.Accounts
+	err := r.db.With(ctx).Select().From("accounts").Where(dbx.NewExp("phone={:phone}", dbx.Params{"phone":phone})).One(&account)
 	return account, err
 }
 

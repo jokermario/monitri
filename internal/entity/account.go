@@ -22,11 +22,11 @@ type Accounts struct {
 	Bankname           string    `json:"bankname"`
 	BankAccountNo      string    `json:"bank_account_no"`
 	ConfirmedEmail     int       `json:"confirmed_email"`
-	ConfirmEmailToken  int      `json:"confirm_email_token"`
+	ConfirmEmailToken  int       `json:"confirm_email_token"`
 	ConfirmEmailExpiry int64     `json:"confirm_email_expiry"`
 	ConfirmedPhone     int       `json:"confirmed_phone"`
 	ConfirmPhoneToken  int       `json:"confirm_phone_token"`
-	ConfirmPhoneExpiry int       `json:"confirm_phone_expiry"`
+	ConfirmPhoneExpiry int64     `json:"confirm_phone_expiry"`
 	Managed            int       `json:"managed"`
 	AccountManagerId   string    `json:"account_manager_id"`
 	CreatedAt          time.Time `json:"created_at"`

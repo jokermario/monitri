@@ -30,6 +30,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/logout", res.logout)
 	r.Post("/refresh/token", res.refreshToken)
 	r.Post("/account/email/token", res.sendEmailVeriToken)
+	r.Post("/account/phone/token", res.sendPhoneVeriToken)
 	r.Post("/account/verify/email/<token>", res.verifyEmailVeriToken)
 }
 
@@ -187,6 +188,15 @@ func (r resource) refreshToken(rc *routing.Context) error {
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.generateAndSendEmailVerificationToken(rc.Request.Context(), identity.GetEmail())
+	if err != nil {
+		return errors.InternalServerError("an error occurred while generating and sending token")
+	}
+	return nil
+}
+
+func (r resource) sendPhoneVeriToken(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	err := r.service.generateAndSendPhoneVerificationToken(rc.Request.Context(), identity.GetPhone())
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}

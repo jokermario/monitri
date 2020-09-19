@@ -1,7 +1,11 @@
 dsn: "postgres://127.0.0.1/monitridb?sslmode=disable&user=postgres&password=joker"
 jwt_access_token_signing_key: "LxsKJywDL5O5PvgODZhBH12KE6k2yL8E"
 jwt_refresh_token_signing_key: "ODZhBH12KE6k2yL8ELxsKJywDL5O5Pvg"
-sendgrid_api_key: "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"
 redis_dsn: "localhost:6379"
 access_token_expiration: 1
 refresh_token_expiration: 24
+sms_api_url: "https://api.africastalking.com/version1/messaging"
+email_host: "smtp.gmail.com"
+email_host_port: 587
+email_from: "monitrillc@gmail.com"
+email_password: "DIWLTYTS.1997$"

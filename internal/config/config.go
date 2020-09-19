@@ -28,10 +28,18 @@ type Config struct {
 	AccessTokenExpiration int `yaml:"access_token_expiration" env:"JWT_EXPIRATION"`
 	// JWT refresh token expiration in hours. Defaults to 72 hours (3 days)
 	RefreshTokenExpiration int `yaml:"refresh_token_expiration" env:"JWT_EXPIRATION"`
-	//Sendgrid Api Key
-	SendGridApiKey string `yaml:"sendgrid_api_key" env:"SENDGRID_API_KEY"`
 	//the data source name for connecting to redis
 	RedisDSN string `yaml:"redis_dsn" env:"REDIS_DSN"`
+	//SMS Api Url
+	SMSApiUrl string `yaml:"sms_api_url" env:"SMS_API_URL"`
+	//Email host
+	EmailHost string `yaml:"email_host" env:"EMAIL_FROM"`
+	//Email port
+	EmailHostPort int `yaml:"email_host_port" env:"EMAIL_HOST_PORT"`
+	//Email from
+	EmailFrom string `yaml:"email_from" env:"EMAIL_FROM"`
+	//Email Password
+	EmailPassword string `yaml:"email_password" env:"EMAIL_PASSWORD"`
 }
 
 // Validate validates the application configuration.

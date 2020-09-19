@@ -107,11 +107,17 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 				db,
 				logger),
 			logger,
-			email.NewService(logger, cfg.SendGridApiKey),
+			email.NewService(
+				logger,
+				cfg.EmailHost,
+				cfg.EmailHostPort,
+				cfg.EmailFrom,
+				cfg.EmailPassword),
 			cfg.AccessTokenSigningKey,
 			cfg.RefreshTokenSigningKey,
 			cfg.AccessTokenExpiration,
-			cfg.RefreshTokenExpiration),
+			cfg.RefreshTokenExpiration,
+			cfg.SMSApiUrl),
 		cfg.AccessTokenSigningKey, cfg.RefreshTokenSigningKey, logger, redisConn)
 
 	//auth.RegisterHandlers(rg.Group(""),

@@ -15,6 +15,7 @@ import (
 	"github.com/jokermario/monitri/internal/email"
 	"github.com/jokermario/monitri/internal/errors"
 	"github.com/jokermario/monitri/internal/healthcheck"
+	"github.com/jokermario/monitri/internal/phone"
 	"github.com/jokermario/monitri/pkg/accesslog"
 	"github.com/jokermario/monitri/pkg/dbcontext"
 	"github.com/jokermario/monitri/pkg/log"
@@ -113,11 +114,11 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 				cfg.EmailHostPort,
 				cfg.EmailFrom,
 				cfg.EmailPassword),
+			phone.NewService(logger, cfg.SMSApiUrl, cfg.SMSUsername),
 			cfg.AccessTokenSigningKey,
 			cfg.RefreshTokenSigningKey,
 			cfg.AccessTokenExpiration,
-			cfg.RefreshTokenExpiration,
-			cfg.SMSApiUrl),
+			cfg.RefreshTokenExpiration),
 		cfg.AccessTokenSigningKey, cfg.RefreshTokenSigningKey, logger, redisConn)
 
 	//auth.RegisterHandlers(rg.Group(""),

@@ -32,6 +32,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/email/token", res.sendEmailVeriToken)
 	r.Post("/account/phone/token", res.sendPhoneVeriToken)
 	r.Post("/account/verify/email/<token>", res.verifyEmailVeriToken)
+	r.Post("/account/verify/phone/<token>", res.verifyPhoneVeriToken)
 }
 
 type resource struct {
@@ -97,8 +98,9 @@ func (r resource) deleteById(rc *routing.Context) error {
 		return err
 	}
 	return rc.WriteWithStatus(struct {
-		Success string `json:"success"`
-	}{"deleted successfully"}, http.StatusOK)
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "deleted successfully"}, http.StatusOK)
 }
 
 // login returns a handler that handles accounts login request.
@@ -148,7 +150,7 @@ func (r resource) createAccount(logger log.Logger) routing.Handler {
 		return context.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-		}{"Success", "Account created successfully"}, http.StatusOK)
+		}{"success", "Account created successfully"}, http.StatusOK)
 	}
 }
 
@@ -157,8 +159,9 @@ func (r resource) logout(rc *routing.Context) error {
 	//deletes the refresh token from redis
 	_ = r.service.logOut(rc.Request.Context(), r.redisConn, identity.GetAccessID())
 	return rc.WriteWithStatus(struct {
-		Success string `json:"success"`
-	}{"logged out successfully"}, http.StatusOK)
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "logged out successfully"}, http.StatusOK)
 }
 
 func (r resource) refreshToken(rc *routing.Context) error {
@@ -191,7 +194,10 @@ func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}
-	return nil
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "sent successfully"}, http.StatusOK)
 }
 
 func (r resource) sendPhoneVeriToken(rc *routing.Context) error {
@@ -200,12 +206,24 @@ func (r resource) sendPhoneVeriToken(rc *routing.Context) error {
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}
-	return nil
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "sent successfully"}, http.StatusOK)
 }
 
 func (r resource) verifyEmailVeriToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	_, ok := r.service.verifyEmailVerificationToken(rc.Request.Context(), identity.GetID(), rc.Param("token"))
+	if !ok {
+		return errors.InternalServerError("an error occurred while verifying the token")
+	}
+	return nil
+}
+
+func (r resource) verifyPhoneVeriToken(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	_, ok := r.service.verifyPhoneVerificationToken(rc.Request.Context(), identity.GetID(), rc.Param("token"))
 	if !ok {
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}

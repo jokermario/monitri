@@ -32,6 +32,8 @@ type Config struct {
 	RedisDSN string `yaml:"redis_dsn" env:"REDIS_DSN"`
 	//SMS Api Url
 	SMSApiUrl string `yaml:"sms_api_url" env:"SMS_API_URL"`
+	//SMS Username
+	SMSUsername string `yaml:"sms_username" env:"SMS_USERNAME"`
 	//Email host
 	EmailHost string `yaml:"email_host" env:"EMAIL_FROM"`
 	//Email port

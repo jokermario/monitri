@@ -33,6 +33,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/phone/token", res.sendPhoneVeriToken)
 	r.Post("/account/verify/email/<token>", res.verifyEmailVeriToken)
 	r.Post("/account/verify/phone/<token>", res.verifyPhoneVeriToken)
+	r.Post("/account/change/password", res.changePassword)
 }
 
 type resource struct {
@@ -228,4 +229,22 @@ func (r resource) verifyPhoneVeriToken(rc *routing.Context) error {
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}
 	return nil
+}
+
+func (r resource) changePassword(rc *routing.Context) error {
+	var input ChangePasswordRequest
+	if err := rc.Read(&input); err != nil {
+		r.logger.With(rc.Request.Context()).Errorf("problems occurred reading the payload: %v", err)
+		return errors.BadRequest("")
+	}
+
+	identity := CurrentAccount(rc.Request.Context())
+	_, ok := r.service.ChangePassword(rc.Request.Context(), identity.GetID(), identity.GetEmail(), input)
+	if !ok {
+		return errors.InternalServerError("an error occurred while verifying the token")
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "password changed successfully"}, http.StatusOK)
 }

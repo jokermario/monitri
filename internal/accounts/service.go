@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type Service interface {
@@ -33,6 +35,7 @@ type Service interface {
 	GetAccounts(ctx context.Context, offset, limit int) ([]Account, error)
 	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error)
 	CreateAccount(ctx context.Context, req CreateAccountsRequest) error
+	ChangePassword (ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
 	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
 	checkAuthKeyIfExist(conn redis.Conn, key string) (string, error)
 	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
@@ -90,17 +93,8 @@ type CreateAccountsRequest struct {
 	Password string `json:"password"`
 }
 
-func (lr LoginRequest) validate() error {
-	return validation.ValidateStruct(&lr,
-		validation.Field(&lr.Email, validation.Required, is.Email),
-		validation.Field(&lr.Password, validation.Required))
-}
-
-func (car CreateAccountsRequest) validate() error {
-	return validation.ValidateStruct(&car,
-		validation.Field(&car.Email, validation.Required, is.Email),
-		validation.Field(&car.Phone, validation.Required),
-		validation.Field(&car.Password, validation.Required, validation.Length(8, 0)))
+type ChangePasswordRequest struct {
+	Password string `json:"new_password"`
 }
 
 type UpdateAccountRequest struct {
@@ -120,13 +114,33 @@ type UpdateAccountRequest struct {
 	AccountManagerId   string `json:"account_manager_id"`
 }
 
+func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
+	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
+		RefreshTokenSigningKey, AccessTokenExpiration,
+		RefreshTokenExpiration}
+}
+
+func (lr LoginRequest) validate() error {
+	return validation.ValidateStruct(&lr,
+		validation.Field(&lr.Email, validation.Required, is.Email),
+		validation.Field(&lr.Password, validation.Required))
+}
+
+func (car CreateAccountsRequest) validate() error {
+	return validation.ValidateStruct(&car,
+		validation.Field(&car.Email, validation.Required, is.Email),
+		validation.Field(&car.Phone, validation.Required),
+		validation.Field(&car.Password, validation.Required, validation.Length(8, 0)))
+}
+
 func (uar UpdateAccountRequest) validate() error {
 	return validation.ValidateStruct(&uar,
 		validation.Field(&uar.Firstname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Middlename, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Lastname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-		validation.Field(&uar.Dob, validation.
-			Match(regexp.MustCompile("^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$"))),
+		validation.Field(&uar.Dob, validation.Required,
+			validation.Match(regexp.MustCompile("^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$"))),
 		validation.Field(&uar.Password, validation.Length(8, 0)),
 		validation.Field(&uar.Address, is.Alphanumeric),
 		validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
@@ -137,11 +151,9 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
 }
 
-func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
-	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
-		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration}
+func (cpr ChangePasswordRequest) validate() error {
+	return validation.ValidateStruct(&cpr,
+		validation.Field(&cpr.Password, validation.Required, validation.Length(8, 0)))
 }
 
 func (s service) GetById(ctx context.Context, id string) (Account, error) {
@@ -307,12 +319,107 @@ func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) e
 	contentToString := string(content)
 	emailErr := s.emailService.SendEmail(req.Email, "Welcome to Monitri", contentToString)
 	if emailErr != nil {
-		s.logger.Errorf("an error occurred while trying to send email.\nThe error: %s", err)
+		s.logger.Errorf("an error occurred while trying to send acc creation email.\nThe error: %s", err)
 		return emailErr
 	}
 
 	logger.Infof("account created successfully")
 	return nil
+}
+
+func (s service) verifyPassword(password string) error {
+	var uppercasePresent bool
+	var lowercasePresent bool
+	var numberPresent bool
+	var specialCharPresent bool
+	const minPassLength = 8
+	const maxPassLength = 64
+	var passLen int
+	var errorString string
+
+	for _, ch := range password {
+		switch {
+		case unicode.IsNumber(ch):
+			numberPresent = true
+			passLen++
+		case unicode.IsUpper(ch):
+			uppercasePresent = true
+			passLen++
+		case unicode.IsLower(ch):
+			lowercasePresent = true
+			passLen++
+		case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
+			specialCharPresent = true
+			passLen++
+		case ch == ' ':
+			passLen++
+		}
+	}
+	appendError := func(err string) {
+		if len(strings.TrimSpace(errorString)) != 0 {
+			errorString += ", " + err
+		} else {
+			errorString = err
+		}
+	}
+	if !lowercasePresent {
+		appendError("lowercase letter missing")
+	}
+	if !uppercasePresent {
+		appendError("uppercase letter missing")
+	}
+	if !numberPresent {
+		appendError("atleast one numeric character required")
+	}
+	if !specialCharPresent {
+		appendError("special character missing")
+	}
+	if !(minPassLength <= passLen && passLen <= maxPassLength) {
+		appendError(fmt.Sprintf("password length must be between %d to %d characters long",
+			minPassLength, maxPassLength))
+	}
+
+	if len(errorString) != 0 {
+		s.logger.Errorf("an error occurred while verifying the password. The Error: %s", errorString)
+		return fmt.Errorf(errorString)
+	}
+	return nil
+}
+
+func (s service) ChangePassword (ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
+	logger := s.logger.With(ctx, "account", id)
+	if strErr := req.validate(); strErr != nil {
+		logger.Errorf("validation failed.\n" +
+			"The error: %s", strErr)
+		return strErr, false
+	}
+	if err := s.verifyPassword(req.Password); err != nil {
+		logger.Errorf("validation failed.\n" +
+			"The error: %s", err)
+		return err, false
+	}
+	acc, err := s.GetById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to fetch the account.\n" +
+			"The error: %s", err)
+		return  err, false
+	}
+	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+	acc.Password = string(hashedPass)
+	updateErr := s.repo.Update(ctx, acc.Accounts)
+	if updateErr != nil {
+		logger.Errorf("an error occurred while trying to update the password to the account row.\n" +
+			"The error: %s", updateErr)
+		return updateErr, false
+	}
+	content, _ := ioutil.ReadFile("internal/email/passwordChangedNotificationTemplate.gohtml")
+	contentToString := string(content)
+	emailErr := s.emailService.SendEmail(email, "Password Change Notification", contentToString)
+	if emailErr != nil {
+		s.logger.Errorf("an error occurred while trying to send pass change notif email.\nThe error: %s", err)
+		return emailErr, false
+	}
+	return nil, true
 }
 
 func (s service) generateTokens(identity Identity) (*TokenDetails, error) {

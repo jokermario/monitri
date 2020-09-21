@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS accounts
                                 confirm_phone_expiry INTEGER NULL,
                                 managed INTEGER NOT NULL DEFAULT 0,
                                 account_manager_id VARCHAR(50) NULL,
+                                totp_secret TEXT NULL,
                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                             );

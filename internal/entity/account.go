@@ -29,6 +29,7 @@ type Accounts struct {
 	ConfirmPhoneExpiry int64     `json:"confirm_phone_expiry"`
 	Managed            int       `json:"managed"`
 	AccountManagerId   string    `json:"account_manager_id"`
+	TotpSecret         string    `json:"totp_secret"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -39,6 +40,10 @@ func (a Accounts) GetAccessID() string {
 
 func (a Accounts) GetRefreshID() string {
 	return a.RefreshUUID
+}
+
+func (a Accounts) GetTOTPSecret() string {
+	return a.TotpSecret
 }
 
 func (a Accounts) GetRefreshToken() string {

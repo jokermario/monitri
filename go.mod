@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/lib/pq v1.2.0
 	github.com/mailjet/mailjet-apiv3-go v0.0.0-20190724151621-55e56f74078c
+	github.com/pquerna/otp v1.2.0
 	github.com/qiangxue/go-env v1.0.0
 	github.com/sendgrid/rest v2.6.1+incompatible
 	github.com/stretchr/testify v1.5.1

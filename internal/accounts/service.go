@@ -14,8 +14,10 @@ import (
 	"github.com/jokermario/monitri/internal/errors"
 	"github.com/jokermario/monitri/internal/phone"
 	"github.com/jokermario/monitri/pkg/log"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
+	"image/png"
 	"io/ioutil"
 	"math/big"
 	"regexp"
@@ -35,7 +37,7 @@ type Service interface {
 	GetAccounts(ctx context.Context, offset, limit int) ([]Account, error)
 	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error)
 	CreateAccount(ctx context.Context, req CreateAccountsRequest) error
-	ChangePassword (ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
+	ChangePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
 	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
 	checkAuthKeyIfExist(conn redis.Conn, key string) (string, error)
 	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
@@ -47,6 +49,9 @@ type Service interface {
 	verifyPhoneVerificationToken(ctx context.Context, id, token string) (error, bool)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
 	generateAndSendPhoneVerificationToken(ctx context.Context, receiverPhone string) error
+	setupTOTP(ctx context.Context, email string) (string, []byte, error)
+	validateTOTPFirstTime(ctx context.Context, id, passcode, secret string) bool
+	validateTOTP(ctx context.Context, passcode, secret string) bool
 }
 
 // Identity represents an authenticated accounts identity.
@@ -56,6 +61,7 @@ type Identity interface {
 	GetID() string
 	GetEmail() string
 	GetPhone() string
+	GetTOTPSecret() string
 }
 
 type service struct {
@@ -302,15 +308,22 @@ func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) e
 	if err := req.validate(); err != nil {
 		return err
 	}
+	if err := s.verifyPassword(req.Password); err != nil {
+		logger.Errorf("validation failed.\n"+
+			"The error: %s", err)
+		return err
+	}
 	id := entity.GenerateID()
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 
 	// FIXME I knowingly didn't check for already existing email coz i'm relying on sql uniqueness in DB
 	err := s.repo.Create(ctx, entity.Accounts{
-		Id:       strings.TrimSpace(id),
-		Email:    strings.TrimSpace(req.Email),
-		Phone:    strings.TrimSpace(req.Phone),
-		Password: string(hashedPass),
+		Id:        strings.TrimSpace(id),
+		Email:     strings.TrimSpace(req.Email),
+		Phone:     strings.TrimSpace(req.Phone),
+		Password:  string(hashedPass),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	})
 	if err != nil {
 		return err
@@ -331,7 +344,7 @@ func (s service) verifyPassword(password string) error {
 	var uppercasePresent bool
 	var lowercasePresent bool
 	var numberPresent bool
-	var specialCharPresent bool
+	//var specialCharPresent bool
 	const minPassLength = 8
 	const maxPassLength = 64
 	var passLen int
@@ -348,9 +361,9 @@ func (s service) verifyPassword(password string) error {
 		case unicode.IsLower(ch):
 			lowercasePresent = true
 			passLen++
-		case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
-			specialCharPresent = true
-			passLen++
+		//case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
+		//	specialCharPresent = true
+		//	passLen++
 		case ch == ' ':
 			passLen++
 		}
@@ -371,9 +384,9 @@ func (s service) verifyPassword(password string) error {
 	if !numberPresent {
 		appendError("atleast one numeric character required")
 	}
-	if !specialCharPresent {
-		appendError("special character missing")
-	}
+	//if !specialCharPresent {
+	//	appendError("special character missing")
+	//}
 	if !(minPassLength <= passLen && passLen <= maxPassLength) {
 		appendError(fmt.Sprintf("password length must be between %d to %d characters long",
 			minPassLength, maxPassLength))
@@ -386,29 +399,29 @@ func (s service) verifyPassword(password string) error {
 	return nil
 }
 
-func (s service) ChangePassword (ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
+func (s service) ChangePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	if strErr := req.validate(); strErr != nil {
-		logger.Errorf("validation failed.\n" +
+		logger.Errorf("validation failed.\n"+
 			"The error: %s", strErr)
 		return strErr, false
 	}
 	if err := s.verifyPassword(req.Password); err != nil {
-		logger.Errorf("validation failed.\n" +
+		logger.Errorf("validation failed.\n"+
 			"The error: %s", err)
 		return err, false
 	}
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
-		logger.Errorf("an error occurred while trying to fetch the account.\n" +
+		logger.Errorf("an error occurred while trying to fetch the account.\n"+
 			"The error: %s", err)
-		return  err, false
+		return err, false
 	}
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	acc.Password = string(hashedPass)
 	updateErr := s.repo.Update(ctx, acc.Accounts)
 	if updateErr != nil {
-		logger.Errorf("an error occurred while trying to update the password to the account row.\n" +
+		logger.Errorf("an error occurred while trying to update the password to the account row.\n"+
 			"The error: %s", updateErr)
 		return updateErr, false
 	}
@@ -609,6 +622,58 @@ func (s service) verifyPhoneVerificationToken(ctx context.Context, id, token str
 	}
 
 	return nil, true
+}
+
+func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, error) {
+	logger := s.logger.With(ctx, "account", email)
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Monitri",
+		AccountName: email,
+	})
+	if err != nil {
+		logger.Errorf("an error occurred while trying to generate totp key. The error: %s", err)
+	}
+	var buf bytes.Buffer
+	img, errr := key.Image(200, 200)
+	if errr != nil {
+		logger.Errorf("an error occurred while trying to generate totp key. The error: %s", errr)
+	}
+	_ = png.Encode(&buf, img)
+	return key.Secret(), buf.Bytes(), nil
+}
+
+func (s service) validateTOTPFirstTime(ctx context.Context, id, passcode, secret string) bool {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.GetById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to fetch user acc. The error: %s", err)
+	}
+	ok := totp.Validate(passcode, secret)
+	if !ok {
+		logger.Errorf("passcode=%s\n secret=%s", passcode, secret)
+		return false
+	}
+	acc.TotpSecret = secret
+	acc.UpdatedAt = time.Now()
+	errr := s.repo.activateAuth2FA(ctx, acc.Accounts, entity.Settings{
+		AccountId: id,
+		TwofaGoogleAuth: 1,
+	})
+	//updateErr := s.repo.Update(ctx, acc.Accounts)
+	if errr != nil {
+		logger.Errorf("an error occurred while trying to update totp secret for the acc. The error: %s", errr)
+		return false
+	}
+	return true
+}
+
+func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool {
+	logger := s.logger.With(ctx, "account", secret)
+	if ok := totp.Validate(passcode, secret); !ok {
+		logger.Errorf("passcode validation failed.")
+		return false
+	}
+	return true
 }
 
 //redis

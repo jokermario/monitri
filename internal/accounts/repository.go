@@ -22,6 +22,7 @@ type Repository interface {
 	SetRedisKey(conn redis.Conn, exp int64, key, value string) error
 	GetRedisKey(conn redis.Conn, key string) (string, error)
 	DeleteRedisKeys(conn redis.Conn, keys ...string) error
+	activateAuth2FA(ctx context.Context, accounts entity.Accounts, settings entity.Settings) error
 }
 
 type repository struct {
@@ -32,6 +33,8 @@ type repository struct {
 func NewRepository(db *dbcontext.DB, logger log.Logger) Repository {
 	return repository{db, logger}
 }
+
+//------------------------------------------------------ACCOUNTS--------------------------------------------------------
 
 func (r repository) GetById(ctx context.Context, id string) (entity.Accounts, error) {
 	var account entity.Accounts
@@ -85,7 +88,48 @@ func (r repository) GetAccounts(ctx context.Context, offset, limit int) ([]entit
 	return accounts, err
 }
 
-//redis
+//------------------------------------------------------SETTINGS--------------------------------------------------------
+
+func (r repository) GetSettingsById(ctx context.Context, id string) (entity.Settings, error) {
+	var settings entity.Settings
+	err := r.db.With(ctx).Select().Model(id, &settings)
+	return settings, err
+}
+
+func (r repository) CreateSettings(ctx context.Context, settings entity.Settings) error {
+	return r.db.With(ctx).Model(&settings).Insert()
+}
+
+func (r repository) UpdateSettings(ctx context.Context, settings entity.Settings) error {
+	return r.db.With(ctx).Model(&settings).Update()
+}
+
+func (r repository) DeleteSettings(ctx context.Context, id string) error {
+	settings, err := r.GetSettingsById(ctx, id)
+	if err != nil {
+		return err
+	}
+	return r.db.With(ctx).Model(&settings).Delete()
+}
+
+//-----------------------------------------------------TRANSACTIONAL----------------------------------------------------
+
+func (r repository) activateAuth2FA(ctx context.Context, accounts entity.Accounts, settings entity.Settings) error {
+	if err := r.db.Transactional(ctx, func(ctx context.Context) error {
+		if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
+			return accUpdateErr
+		}
+		if setUpdateErr := r.db.With(ctx).Model(&settings).Insert(); setUpdateErr != nil {
+			return setUpdateErr
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+//-------------------------------------------------------REDIS----------------------------------------------------------
 func (r repository) SetRedisKey(conn redis.Conn, exp int64, key, value string) error {
 	_, err := conn.Do("SETEX", key, exp, value)
 	if err != nil {

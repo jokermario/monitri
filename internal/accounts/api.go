@@ -34,6 +34,9 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/verify/email/<token>", res.verifyEmailVeriToken)
 	r.Post("/account/verify/phone/<token>", res.verifyPhoneVeriToken)
 	r.Post("/account/change/password", res.changePassword)
+	r.Post("/account/totp/setup", res.setupTOTP)
+	r.Post("/account/totp/initial/validate/<secret>/<passcode>", res.validateTOTPFirstTime)
+	r.Post("/account/totp/validate/<passcode>", res.validateTOTP)
 }
 
 type resource struct {
@@ -145,7 +148,7 @@ func (r resource) createAccount(logger log.Logger) routing.Handler {
 		err := r.service.CreateAccount(context.Request.Context(), input)
 		if err != nil {
 			logger.With(context.Request.Context()).Errorf("problems occurred while creating an account: %v", err)
-			return context.WriteWithStatus(errors.InternalServerError("email or phone already exist"),
+			return context.WriteWithStatus(errors.InternalServerError("problems occurred while creating an account"),
 				http.StatusBadRequest)
 		}
 		return context.WriteWithStatus(struct {
@@ -247,4 +250,45 @@ func (r resource) changePassword(rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}{"success", "password changed successfully"}, http.StatusOK)
+}
+
+func (r resource) setupTOTP(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	key, imageByte, err := r.service.setupTOTP(rc.Request.Context(), identity.GetEmail())
+	if err != nil {
+		return errors.InternalServerError("an error occurred while setting up the TOTP")
+	}
+	type data struct {
+		Key       string `json:"key"`
+		ImageByte []byte `json:"imageByte"`
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data    data   `json:"data"`
+	}{"success", "TOTP was created successfully", data{Key: key, ImageByte:imageByte}}, http.StatusOK)
+
+}
+
+func (r resource) validateTOTPFirstTime(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	if ok := r.service.validateTOTPFirstTime(rc.Request.Context(), identity.GetID(), rc.Param("passcode"),
+		rc.Param("secret")); !ok {
+		return errors.InternalServerError("an error occurred while validating totp for the first time")
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "TOTP was setup successfully"}, http.StatusOK)
+}
+
+func (r resource) validateTOTP (rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	if ok := r.service.validateTOTP(rc.Request.Context(), rc.Param("passcode"), identity.GetTOTPSecret()); !ok {
+		return errors.InternalServerError("an error occurred while validating totp")
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "TOTP was setup successfully"}, http.StatusOK)
 }

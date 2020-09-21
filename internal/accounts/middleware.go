@@ -115,12 +115,12 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 		if val == "" {
 			return errors.Unauthorized("access token expired")
 		}
-
+		acc, _ := service2.GetById(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
 		ctx := WithUser(
 			c.Request.Context(), token.Claims.(jwt.MapClaims)["accessUUID"].(string),
 			"",
 			token.Claims.(jwt.MapClaims)["userId"].(string),
-			token.Claims.(jwt.MapClaims)["email"].(string), token.Claims.(jwt.MapClaims)["phone"].(string))
+			token.Claims.(jwt.MapClaims)["email"].(string), token.Claims.(jwt.MapClaims)["phone"].(string), acc.TotpSecret)
 		c.Request = c.Request.WithContext(ctx)
 		return nil
 	}
@@ -135,7 +135,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 			c.Request.Context(), "",
 			token.Claims.(jwt.MapClaims)["refreshUUID"].(string),
 			token.Claims.(jwt.MapClaims)["userId"].(string),
-			token.Claims.(jwt.MapClaims)["email"].(string), "")
+			token.Claims.(jwt.MapClaims)["email"].(string), "", "")
 		c.Request = c.Request.WithContext(ctx)
 		return nil
 	}
@@ -150,12 +150,12 @@ const (
 )
 
 // WithUser returns a context that contains the accounts identity from the given JWT.
-func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone string) context.Context {
+func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, totp string) context.Context {
 	if accessUUID != "" {
-		return context.WithValue(ctx, userKey, entity.Accounts{AccessUUID: accessUUID, Id: id, Email: email, Phone: phone})
+		return context.WithValue(ctx, userKey, entity.Accounts{AccessUUID: accessUUID, Id: id, Email: email, Phone: phone, TotpSecret: totp})
 	}
 	if refreshUUID != "" {
-		return context.WithValue(ctx, userKey, entity.Accounts{RefreshUUID: refreshUUID, Id: id, Email: email, Phone: phone})
+		return context.WithValue(ctx, userKey, entity.Accounts{RefreshUUID: refreshUUID, Id: id, Email: email, Phone: phone, TotpSecret: totp})
 	}
 
 	return nil
@@ -178,7 +178,7 @@ func MockAuthHandler(c *routing.Context) error {
 	if c.Request.Header.Get("Authorization") != "TEST" {
 		return errors.Unauthorized("")
 	}
-	ctx := WithUser(c.Request.Context(), "", "", "100", "Tester", "")
+	ctx := WithUser(c.Request.Context(), "", "", "100", "Tester", "", "")
 	c.Request = c.Request.WithContext(ctx)
 	return nil
 }

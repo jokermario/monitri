@@ -7,7 +7,6 @@
 *.yml
 *.env
 *.log
-config
 
 # Test binary, built with `go test -c`
 *.test

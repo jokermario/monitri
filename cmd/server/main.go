@@ -40,11 +40,11 @@ var flagConfig = flag.String("config", "./config/local.yml", "path to the config
 //		}
 //	}
 //}
-
 func main() {
 	flag.Parse()
 	// create root logger tagged with server version
 	logger := log.New().With(nil, "version", Version)
+
 
 	// load application configurations
 	cfg, err := config.Load(*flagConfig, logger)

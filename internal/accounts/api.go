@@ -21,7 +21,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	authHandler := Handler(AccessTokenSigningKey, RefreshTokenSigningKey, service2, redisConn)
 	r.Use(RateHandler())
 
-
+	r.Get("/ping", res.healthCheck)
 	r.Post("/generate/token", res.login(logger))
 	r.Post("/generate/mobile2fa/token", res.LoginWithMobile2FA(logger))
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
@@ -53,6 +53,10 @@ type resource struct {
 	service   Service
 	logger    log.Logger
 	redisConn redis.Conn
+}
+
+func (r resource) healthCheck( rc *routing.Context) error {
+	return rc.WriteWithStatus("Live", http.StatusOK)
 }
 
 func (r resource) getById(rc *routing.Context) error {

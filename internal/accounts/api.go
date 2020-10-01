@@ -2,7 +2,7 @@ package accounts
 
 import "C"
 import (
-	"fmt"
+	"encoding/hex"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -128,10 +128,18 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			return errors.BadRequest("")
 		}
 		TokenDetails, loginErr, additionalSec := r.service.Login(c.Request.Context(), req)
-		fmt.Println(additionalSec)
 		if loginErr != nil {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
+		}
+		//encrypt access and refresh token
+		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+		if err != nil {
+			return errors.InternalServerError("")
 		}
 		if additionalSec != ""{
 			return c.Write(struct {
@@ -149,7 +157,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
 			type data struct {
-				TokenType    string `json:"token_type"`
+				//TokenType    string `json:"token_type"`
 				AccessToken  string `json:"access_token"`
 				ExpiryTime   int64  `json:"expires"`
 				RefreshToken string `json:"refresh_token"`
@@ -158,8 +166,8 @@ func (r resource) login(logger log.Logger) routing.Handler {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 				Data data `json:"data,omitempty"`
-			}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-				TokenDetails.RefreshToken}})
+			}{"success", "tokens generated", data{hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+				hex.EncodeToString(encRefreshToken)}})
 		}
 	}
 }
@@ -178,6 +186,15 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
 		}
+		//encrypt access and refresh token
+		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
 		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
 		if redisErr != nil {
 				return redisErr
@@ -188,7 +205,7 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 		type data struct {
-			TokenType    string `json:"token_type"`
+			//TokenType    string `json:"token_type"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -197,8 +214,8 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data data `json:"data,omitempty"`
-		}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-			TokenDetails.RefreshToken}})
+		}{"success", "tokens generated", data{hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			hex.EncodeToString(encRefreshToken)}})
 	}
 }
 
@@ -212,6 +229,19 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			return errors.BadRequest("")
 		}
 		TokenDetails, loginErr := r.service.LoginWithEmail2FA(c.Request.Context(), req)
+		if loginErr != nil {
+			logger.Errorf("invalid request: %v", loginErr)
+			return loginErr
+		}
+		//encrypt access and refresh token
+		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
 		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
 		if redisErr != nil {
 			return redisErr
@@ -221,12 +251,9 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			return errors.InternalServerError("")
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
-		if loginErr != nil {
-			logger.Errorf("invalid request: %v", loginErr)
-			return loginErr
-		}
+
 		type data struct {
-			TokenType    string `json:"token_type"`
+			//TokenType    string `json:"token_type"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -235,8 +262,8 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data data `json:"data,omitempty"`
-			}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-				TokenDetails.RefreshToken}})
+			}{"success", "tokens generated", data{hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			hex.EncodeToString(encRefreshToken)}})
 	}
 }
 
@@ -254,6 +281,15 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
 		}
+		//encrypt access and refresh token
+		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
 
 		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
 		if redisErr != nil {
@@ -265,7 +301,7 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 		type data struct {
-			TokenType    string `json:"token_type"`
+			//TokenType    string `json:"token_type"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -274,8 +310,8 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data data `json:"data,omitempty"`
-		}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-			TokenDetails.RefreshToken}})
+		}{"success", "tokens generated", data{hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			hex.EncodeToString(encRefreshToken)}})
 	}
 }
 

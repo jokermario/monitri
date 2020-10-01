@@ -20,6 +20,8 @@ type Config struct {
 	ServerPort int `yaml:"server_port" env:"SERVER_PORT"`
 	// the data source name (DSN) for connecting to the database. required.
 	DSN string `yaml:"dsn" env:"DSN,secret"`
+	//AES Encryption Key
+	EncKey string `yaml:"enc_key" env:"ENC_KEY,secret"`
 	// JWT access token signing key. required.
 	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
 	// JWT refresh token signing key. required.
@@ -75,6 +77,14 @@ func Load(file string, logger log.Logger) (*Config, error) {
 	if err = env.New("MONITRI_", logger.Infof).Load(&c); err != nil {
 		return nil, err
 	}
+	//for _, env := range os.Environ() {
+	//	// env is
+	//	envPair := strings.SplitN(env, "=", 2)
+	//	key := envPair[0]
+	//	value := envPair[1]
+	//
+	//	fmt.Printf("%s : %s\n", key, value)
+	//}
 
 	// validation
 	if err = c.Validate(); err != nil {

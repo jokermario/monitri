@@ -128,7 +128,8 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 			cfg.AccessTokenSigningKey,
 			cfg.RefreshTokenSigningKey,
 			cfg.AccessTokenExpiration,
-			cfg.RefreshTokenExpiration),
+			cfg.RefreshTokenExpiration,
+			cfg.EncKey),
 		cfg.AccessTokenSigningKey, cfg.RefreshTokenSigningKey, logger, redisConn)
 
 	//auth.RegisterHandlers(rg.Group(""),

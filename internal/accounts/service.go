@@ -3,6 +3,8 @@ package accounts
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"database/sql"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"html/template"
 	"image/png"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"regexp"
@@ -57,7 +60,9 @@ type Service interface {
 	LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
 	LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
 	set2FA(ctx context.Context, id, email, phone, Type string) error
-	flagIP(conn redis.Conn, ip string) error
+	aesEncrypt(data string) ([]byte, error)
+	aesDecrypt(encryptedText string) ([]byte, error)
+	//flagIP(conn redis.Conn, ip string) error
 }
 
 // Identity represents an authenticated accounts identity.
@@ -79,6 +84,7 @@ type service struct {
 	RefreshTokenSigningKey string
 	AccessTokenExpiration  int
 	RefreshTokenExpiration int
+	EncKey                 string
 }
 
 type Account struct {
@@ -120,19 +126,19 @@ type ChangePasswordRequest struct {
 }
 
 type UpdateAccountRequest struct {
-	Firstname          string `json:"firstname,omitempty"`
-	Middlename         string `json:"middlename,omitempty"`
-	Lastname           string `json:"lastname,omitempty"`
-	Dob                string `json:"dob,omitempty"`
-	Password           string `json:"password,omitempty"`
-	Address            string `json:"address,omitempty"`
+	Firstname  string `json:"firstname,omitempty"`
+	Middlename string `json:"middlename,omitempty"`
+	Lastname   string `json:"lastname,omitempty"`
+	Dob        string `json:"dob,omitempty"`
+	Password   string `json:"password,omitempty"`
+	Address    string `json:"address,omitempty"`
 }
 
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int) Service {
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey string) Service {
 	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration}
+		RefreshTokenExpiration, EncKey}
 }
 
 func (lr LoginRequest) validate() error {
@@ -163,12 +169,12 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.Dob, validation.Required,
 			validation.Match(regexp.MustCompile("^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])+$"))),
 		validation.Field(&uar.Address, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))))
-		//validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-		//validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
-		//validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
-		//validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
-		//validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
-		//validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
+	//validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
+	//validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
+	//validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
+	//validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
+	//validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
+	//validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
 }
 
 func (cpr ChangePasswordRequest) validate() error {
@@ -968,6 +974,70 @@ func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool
 	return true
 }
 
+func (s service) aesEncrypt(data string) ([]byte, error) {
+	convertDataToByte := []byte(data)
+	keyToByte := []byte(s.EncKey)
+
+	//generate a new aes cipher using the key
+	c, err := aes.NewCipher(keyToByte)
+	if err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a cipher")
+		return nil, err
+	}
+
+	//using the galois counter mode (GCM) mode of operation its better than the CBC mode.
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	//create a new byte array the size of the GCM Nonce.
+	nonce := make([]byte, gcm.NonceSize())
+
+	//populate the nonce with cryptographically secure random sequence
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, convertDataToByte, nil), nil
+}
+
+func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
+
+	encryptedTextToByte := []byte(encryptedText)
+
+	keyToByte := []byte(s.EncKey)
+
+	c, err := aes.NewCipher(keyToByte)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to generate a cipher")
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(encryptedText) < nonceSize {
+		s.logger.Errorf("in decrypt: an error occurred while checking if encrypted data matched the nonce size")
+		return nil, err
+	}
+
+	nonce, ciphertext := encryptedTextToByte[:nonceSize], encryptedTextToByte[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to decrypt the encrypted text")
+		return nil, err
+	}
+
+	return plaintext, nil
+}
+
 //redis
 func (s service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0) //converting unix to UTC(to time object)
@@ -999,10 +1069,10 @@ func (s service) logOut(ctx context.Context, conn redis.Conn, keys ...string) er
 }
 
 //todo remember to increase the time to 10 minutes (600sec)
-func (s service) flagIP(conn redis.Conn, ip string) error {
-	err := s.repo.SetRedisKey(conn, 180, ip, "malicious user")
-	if err != nil {
-		s.logger.Errorf("an error occurred while trying to store the flaggedIp in redis. The error:%s", err)
-	}
-	return nil
-}
+//func (s service) flagIP(conn redis.Conn, ip string) error {
+//	err := s.repo.SetRedisKey(conn, 180, ip, "malicious user")
+//	if err != nil {
+//		s.logger.Errorf("an error occurred while trying to store the flaggedIp in redis. The error:%s", err)
+//	}
+//	return nil
+//}

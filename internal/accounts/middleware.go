@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
@@ -71,8 +72,14 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 			AccessTokenVerificationKey = opt.GetVerificationKey(c)
 		}
 		if header != "" {
-			if strings.HasPrefix(header, "Bearer ") {
-				token, err := parser.Parse(header[7:], func(t *jwt.Token) (interface{}, error) { return []byte(AccessTokenVerificationKey), nil })
+			if strings.HasPrefix(header, "X-AUTH-TOKEN ") {
+				hexToByte, err := hex.DecodeString(header[13:])
+				if err != nil {
+					message = err.Error()
+				}
+				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
+				fmt.Println(string(tokenInByte))
+				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(AccessTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
 				}
@@ -84,8 +91,14 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 		}
 
 		if refHeader != "" {
-			if strings.HasPrefix(refHeader, "Bearer ") {
-				token, err := parser.Parse(refHeader[7:], func(t *jwt.Token) (interface{}, error) { return []byte(RefreshTokenVerificationKey), nil })
+			if strings.HasPrefix(refHeader, "X-AUTH-TOKEN ") {
+				hexToByte, err := hex.DecodeString(refHeader[13:])
+				if err != nil {
+					message = err.Error()
+				}
+				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
+				fmt.Println(string(tokenInByte))
+				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(RefreshTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
 				}

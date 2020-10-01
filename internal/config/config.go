@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultServerPort         = 8080
+	defaultServerPort         = 8081
 	defaultAccessExpirationHours = 1
 	defaultRefreshExpirationHours = 72
 )

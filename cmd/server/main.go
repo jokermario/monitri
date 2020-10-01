@@ -165,7 +165,7 @@ func logDBExec(logger log.Logger) dbx.ExecLogFunc {
 //redisConnPool returns a redis conn instance to be used
 func redisConnPool(redisDSN string) *redis.Pool{
 	return &redis.Pool{
-		//Maximum number of idle connections int he pool
+		//Maximum number of idle connections in the pool
 		MaxIdle: 80,
 		//Maximum number of connections
 		MaxActive: 12000,

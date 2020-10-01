@@ -111,9 +111,9 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 
 	if header != "" {
 		//generate new access token, store it in redis and delete the old one
-		val, _ := service2.checkAuthKeyIfExist(conn, token.Claims.(jwt.MapClaims)["accessUUID"].(string))
+		val, _ := service2.checkIfKeyExist(conn, token.Claims.(jwt.MapClaims)["accessUUID"].(string))
 		if val == "" {
-			return errors.Unauthorized("access token expired")
+			return errors.Unauthorized("Token is not authorized")
 		}
 		acc, _ := service2.GetById(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
 		ctx := WithUser(
@@ -126,7 +126,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 	}
 	if refHeader != "" {
 		//generate new access token, store it in redis and delete the old one
-		val, _ := service2.checkAuthKeyIfExist(conn, token.Claims.(jwt.MapClaims)["refreshUUID"].(string))
+		val, _ := service2.checkIfKeyExist(conn, token.Claims.(jwt.MapClaims)["refreshUUID"].(string))
 		if val == "" {
 			return errors.Unauthorized("refresh token expired")
 		}
@@ -174,18 +174,18 @@ func CurrentAccount(ctx context.Context) Identity {
 // If the request contains an Authorization header whose value is "TEST", then
 // it considers the accounts is authenticated as "Tester" whose ID is "100".
 // It fails the authentication otherwise.
-func MockAuthHandler(c *routing.Context) error {
-	if c.Request.Header.Get("Authorization") != "TEST" {
-		return errors.Unauthorized("")
-	}
-	ctx := WithUser(c.Request.Context(), "", "", "100", "Tester", "", "")
-	c.Request = c.Request.WithContext(ctx)
-	return nil
-}
-
-// MockAuthHeader returns an HTTP header that can pass the authentication check by MockAuthHandler.
-func MockAuthHeader() http.Header {
-	header := http.Header{}
-	header.Add("Authorization", "TEST")
-	return header
-}
+//func MockAuthHandler(c *routing.Context) error {
+//	if c.Request.Header.Get("Authorization") != "TEST" {
+//		return errors.Unauthorized("")
+//	}
+//	ctx := WithUser(c.Request.Context(), "", "", "100", "Tester", "", "")
+//	c.Request = c.Request.WithContext(ctx)
+//	return nil
+//}
+//
+//// MockAuthHeader returns an HTTP header that can pass the authentication check by MockAuthHandler.
+//func MockAuthHeader() http.Header {
+//	header := http.Header{}
+//	header.Add("Authorization", "TEST")
+//	return header
+//}

@@ -22,7 +22,11 @@ type Repository interface {
 	SetRedisKey(conn redis.Conn, exp int64, key, value string) error
 	GetRedisKey(conn redis.Conn, key string) (string, error)
 	DeleteRedisKeys(conn redis.Conn, keys ...string) error
-	activateAuth2FA(ctx context.Context, accounts entity.Accounts, settings entity.Settings) error
+	updateAccountAndSettingsTableTrans(ctx context.Context, accounts entity.Accounts, settings entity.Settings, Type string) error
+	GetSettingsById(ctx context.Context, id string) (entity.Settings, error)
+	CreateSettings(ctx context.Context, settings entity.Settings) error
+	UpdateSettings(ctx context.Context, settings entity.Settings) error
+	DeleteSettings(ctx context.Context, id string) error
 }
 
 type repository struct {
@@ -92,7 +96,7 @@ func (r repository) GetAccounts(ctx context.Context, offset, limit int) ([]entit
 
 func (r repository) GetSettingsById(ctx context.Context, id string) (entity.Settings, error) {
 	var settings entity.Settings
-	err := r.db.With(ctx).Select().Model(id, &settings)
+	err := r.db.With(ctx).Select().From("settings").Where(dbx.NewExp("account_id={:id}", dbx.Params{"id":id})).One(&settings)
 	return settings, err
 }
 
@@ -114,13 +118,24 @@ func (r repository) DeleteSettings(ctx context.Context, id string) error {
 
 //-----------------------------------------------------TRANSACTIONAL----------------------------------------------------
 
-func (r repository) activateAuth2FA(ctx context.Context, accounts entity.Accounts, settings entity.Settings) error {
+func (r repository) updateAccountAndSettingsTableTrans(ctx context.Context, accounts entity.Accounts, settings entity.Settings, Type string) error {
 	if err := r.db.Transactional(ctx, func(ctx context.Context) error {
-		if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
-			return accUpdateErr
+		if Type == "insert" {
+			if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
+				return accUpdateErr
+			}
+			if setUpdateErr := r.db.With(ctx).Model(&settings).Insert(); setUpdateErr != nil {
+				return setUpdateErr
+			}
 		}
-		if setUpdateErr := r.db.With(ctx).Model(&settings).Insert(); setUpdateErr != nil {
-			return setUpdateErr
+
+		if Type == "update" {
+			if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
+				return accUpdateErr
+			}
+			if setUpdateErr := r.db.With(ctx).Model(&settings).Update(); setUpdateErr != nil {
+				return setUpdateErr
+			}
 		}
 		return nil
 	}); err != nil {

@@ -6,32 +6,35 @@ import (
 
 // Accounts represents an account.
 type Accounts struct {
-	AccessUUID         string    `db:"-"`
-	RefreshUUID        string    `db:"-"`
-	RefreshToken       string    `db:"-"`
-	Sn                 int       `json:"sn"`
-	Id                 string    `json:"id"`
-	Firstname          string    `json:"firstname"`
-	Middlename         string    `json:"middlename"`
-	Lastname           string    `json:"lastname"`
-	Dob                string    `json:"dob"`
-	Email              string    `json:"email"`
-	Password           string    `json:"password"`
-	Address            string    `json:"address"`
-	Phone              string    `json:"phone"`
-	Bankname           string    `json:"bankname"`
-	BankAccountNo      string    `json:"bank_account_no"`
-	ConfirmedEmail     int       `json:"confirmed_email"`
-	ConfirmEmailToken  int       `json:"confirm_email_token"`
-	ConfirmEmailExpiry int64     `json:"confirm_email_expiry"`
-	ConfirmedPhone     int       `json:"confirmed_phone"`
-	ConfirmPhoneToken  int       `json:"confirm_phone_token"`
-	ConfirmPhoneExpiry int64     `json:"confirm_phone_expiry"`
-	Managed            int       `json:"managed"`
-	AccountManagerId   string    `json:"account_manager_id"`
-	TotpSecret         string    `json:"totp_secret"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	AccessUUID         string    `json:"-" db:"-"`
+	RefreshUUID        string    `json:"-" db:"-"`
+	RefreshToken       string    `json:"-" db:"-"`
+	Id                 string    `json:"-"`
+	Firstname          string    `json:"firstname,omitempty"`
+	Middlename         string    `json:"middlename,omitempty"`
+	Lastname           string    `json:"lastname,omitempty"`
+	Dob                string    `json:"dob,omitempty"`
+	Email              string    `json:"email,omitempty"`
+	Password           string    `json:"-"`
+	Address            string    `json:"address,omitempty"`
+	Phone              string    `json:"phone,omitempty"`
+	Bankname           string    `json:"bankname,omitempty"`
+	BankAccountNo      string    `json:"bank_account_no,omitempty"`
+	ConfirmedEmail     int       `json:"confirmed_email,omitempty"`
+	ConfirmEmailToken  int       `json:"confirm_email_token,omitempty"`
+	ConfirmEmailExpiry int64     `json:"confirm_email_expiry,omitempty"`
+	ConfirmedPhone     int       `json:"confirmed_phone,omitempty"`
+	ConfirmPhoneToken  int       `json:"confirm_phone_token,omitempty"`
+	ConfirmPhoneExpiry int64     `json:"confirm_phone_expiry,omitempty"`
+	LoginEmailToken    int       `json:"login_email_token,omitempty"`
+	LoginEmailExpiry   int64     `json:"login_email_expiry,omitempty"`
+	LoginPhoneToken    int       `json:"login_phone_token,omitempty"`
+	LoginPhoneExpiry   int64     `json:"login_phone_expiry,omitempty"`
+	Managed            int       `json:"managed,omitempty"`
+	AccountManagerId   string    `json:"account_manager_id,omitempty"`
+	TotpSecret         string    `json:"-"`
+	CreatedAt          time.Time `json:"created_at,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at,omitempty"`
 }
 
 func (a Accounts) GetAccessID() string {

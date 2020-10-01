@@ -2,12 +2,15 @@ package accounts
 
 import "C"
 import (
+	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
 	"github.com/jokermario/monitri/pkg/log"
 	"github.com/jokermario/monitri/pkg/pagination"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,27 +19,34 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	res := resource{service2, logger, redisConn}
 
 	authHandler := Handler(AccessTokenSigningKey, RefreshTokenSigningKey, service2, redisConn)
+	r.Use(RateHandler())
+
 
 	r.Post("/generate/token", res.login(logger))
+	r.Post("/generate/mobile2fa/token", res.LoginWithMobile2FA(logger))
+	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
+	r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
 	r.Post("/new/account", res.createAccount(logger))
 
 	r.Use(authHandler)
 
-	r.Get("/account/<id>", res.getById)
-	r.Get("/account/<email>", res.getByEmail)
-	r.Get("/user/all")
-	r.Put("")
+	//r.Get("/account/<id>", res.getById)
+	//r.Get("/account/<email>", res.getByEmail)
+	//r.Get("/user/all")
+	//r.Put("")
+	r.Post("/account/profile/update", res.updateProfile)
 	r.Delete("/account/delete", res.deleteById)
 	r.Post("/account/logout", res.logout)
 	r.Post("/refresh/token", res.refreshToken)
 	r.Post("/account/email/token", res.sendEmailVeriToken)
 	r.Post("/account/phone/token", res.sendPhoneVeriToken)
-	r.Post("/account/verify/email/<token>", res.verifyEmailVeriToken)
-	r.Post("/account/verify/phone/<token>", res.verifyPhoneVeriToken)
+	r.Post("/account/verify/email/<token>/<purpose>", res.verifyEmailToken)
+	r.Post("/account/verify/phone/<token>/<purpose>", res.verifyPhoneToken)
 	r.Post("/account/change/password", res.changePassword)
-	r.Post("/account/totp/setup", res.setupTOTP)
-	r.Post("/account/totp/initial/validate/<secret>/<passcode>", res.validateTOTPFirstTime)
-	r.Post("/account/totp/validate/<passcode>", res.validateTOTP)
+	r.Post("/account/auth/totp/setup", res.setupTOTP)
+	r.Post("/account/auth/totp/initial/validate/<secret>/<passcode>", res.validateTOTPFirstTime)
+	r.Post("/account/auth/totp/validate/<passcode>", res.validateTOTP)
+	r.Post("/account/auth/setup2fa/<type>", res.setup2FA)
 }
 
 type resource struct {
@@ -65,14 +75,14 @@ func (r resource) updateProfile(rc *routing.Context) error {
 	var input UpdateAccountRequest
 	if err := rc.Read(&input); err != nil {
 		r.logger.With(rc.Request.Context()).Error(err)
-		return errors.BadRequest("")
+		return errors.BadRequest("cannot be read")
 	}
 
 	identity := CurrentAccount(rc.Request.Context())
 	account, err := r.service.UpdateProfile(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
 		r.logger.With(rc.Request.Context()).Error(err)
-		return errors.BadRequest("")
+		return err
 	}
 
 	return rc.WriteWithStatus(account, http.StatusOK)
@@ -110,30 +120,162 @@ func (r resource) deleteById(rc *routing.Context) error {
 // login returns a handler that handles accounts login request.
 func (r resource) login(logger log.Logger) routing.Handler {
 	return func(c *routing.Context) error {
+		logger := logger.With(c.Request.Context())
 		var req LoginRequest
 
 		if err := c.Read(&req); err != nil {
-			logger.With(c.Request.Context()).Errorf("invalid request: %v", err)
+			logger.Errorf("invalid request: %v", err)
 			return errors.BadRequest("")
 		}
-		TokenDetails, err := r.service.Login(c.Request.Context(), req)
-		if err != nil {
-			return err
+		TokenDetails, loginErr, additionalSec := r.service.Login(c.Request.Context(), req)
+		fmt.Println(additionalSec)
+		if loginErr != nil {
+			logger.Errorf("invalid request: %v", loginErr)
+			return loginErr
+		}
+		if additionalSec != ""{
+			return c.Write(struct {
+				AdditionalSecurity string `json:"additional_security,omitempty"`
+			}{additionalSec})
+		}else {
+			redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
+			if redisErr != nil {
+				return redisErr
+			}
+			ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+			if err != nil {
+				return errors.InternalServerError("")
+			}
+			r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+
+			type data struct {
+				TokenType    string `json:"token_type"`
+				AccessToken  string `json:"access_token"`
+				ExpiryTime   int64  `json:"expires"`
+				RefreshToken string `json:"refresh_token"`
+			}
+			return c.Write(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+				Data data `json:"data,omitempty"`
+			}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
+				TokenDetails.RefreshToken}})
+		}
+	}
+}
+
+func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
+	return func(c *routing.Context) error {
+		logger := logger.With(c.Request.Context())
+		var req AdditionalSecLoginRequest
+
+		if err := c.Read(&req); err != nil {
+			logger.Errorf("invalid request: %v", err)
+			return errors.BadRequest("")
+		}
+		TokenDetails, loginErr := r.service.LoginWithMobile2FA(c.Request.Context(), req)
+		if loginErr != nil {
+			logger.Errorf("invalid request: %v", loginErr)
+			return loginErr
 		}
 		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
 		if redisErr != nil {
-			return redisErr
+				return redisErr
+			}
+		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+		if err != nil {
+			return errors.InternalServerError("")
 		}
-
-		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), c.Request.RemoteAddr, c.Request.UserAgent())
-
-		return c.Write(struct {
+		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+		type data struct {
 			TokenType    string `json:"token_type"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
-		}{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-			TokenDetails.RefreshToken})
+		}
+		return c.Write(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			Data data `json:"data,omitempty"`
+		}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
+			TokenDetails.RefreshToken}})
+	}
+}
+
+func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
+	return func(c *routing.Context) error {
+		logger := logger.With(c.Request.Context())
+		var req AdditionalSecLoginRequest
+
+		if err := c.Read(&req); err != nil {
+			logger.Errorf("invalid request: %v", err)
+			return errors.BadRequest("")
+		}
+		TokenDetails, loginErr := r.service.LoginWithEmail2FA(c.Request.Context(), req)
+		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
+		if redisErr != nil {
+			return redisErr
+		}
+		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+		if loginErr != nil {
+			logger.Errorf("invalid request: %v", loginErr)
+			return loginErr
+		}
+		type data struct {
+			TokenType    string `json:"token_type"`
+			AccessToken  string `json:"access_token"`
+			ExpiryTime   int64  `json:"expires"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		return c.Write(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			Data data `json:"data,omitempty"`
+			}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
+				TokenDetails.RefreshToken}})
+	}
+}
+
+func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
+	return func(c *routing.Context) error {
+		logger := logger.With(c.Request.Context())
+		var req AdditionalSecLoginRequest
+
+		if err := c.Read(&req); err != nil {
+			logger.Errorf("invalid request: %v", err)
+			return errors.BadRequest("")
+		}
+		TokenDetails, loginErr := r.service.LoginWithPhone2FA(c.Request.Context(), req)
+		if loginErr != nil {
+			logger.Errorf("invalid request: %v", loginErr)
+			return loginErr
+		}
+
+		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
+		if redisErr != nil {
+			return redisErr
+		}
+		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+		if err != nil {
+			return errors.InternalServerError("")
+		}
+		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+		type data struct {
+			TokenType    string `json:"token_type"`
+			AccessToken  string `json:"access_token"`
+			ExpiryTime   int64  `json:"expires"`
+			RefreshToken string `json:"refresh_token"`
+		}
+		return c.Write(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			Data data `json:"data,omitempty"`
+		}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
+			TokenDetails.RefreshToken}})
 	}
 }
 
@@ -171,7 +313,9 @@ func (r resource) logout(rc *routing.Context) error {
 func (r resource) refreshToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	userIdentity := r.service.getAccountIdEmailPhone(rc.Request.Context(), identity.GetID())
-
+	if userIdentity == nil {
+		return errors.BadRequest("The refresh token is not valid")
+	}
 	tokenDetails, err := r.service.generateTokens(userIdentity)
 	if err != nil {
 		return errors.InternalServerError("a problem occurred while trying to generate a new access token")
@@ -183,18 +327,23 @@ func (r resource) refreshToken(rc *routing.Context) error {
 
 	//deletes the refresh token from redis
 	_ = r.service.logOut(rc.Request.Context(), r.redisConn, identity.GetRefreshID())
-	return rc.Write(struct {
+	type data struct {
 		TokenType    string `json:"token_type"`
 		AccessToken  string `json:"access_token"`
 		ExpiryTime   int64  `json:"expires"`
 		RefreshToken string `json:"refresh_token"`
-	}{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-		TokenDetails.RefreshToken})
+	}
+	return rc.Write(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data data `json:"data,omitempty"`
+	}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
+		TokenDetails.RefreshToken}})
 }
 
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.generateAndSendEmailVerificationToken(rc.Request.Context(), identity.GetEmail())
+	err := r.service.generateAndSendEmailToken(rc.Request.Context(), identity.GetEmail(), "verification")
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}
@@ -206,7 +355,7 @@ func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 
 func (r resource) sendPhoneVeriToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.generateAndSendPhoneVerificationToken(rc.Request.Context(), identity.GetPhone())
+	err := r.service.generateAndSendPhoneToken(rc.Request.Context(), identity.GetPhone(), "verification")
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}
@@ -216,19 +365,25 @@ func (r resource) sendPhoneVeriToken(rc *routing.Context) error {
 	}{"success", "sent successfully"}, http.StatusOK)
 }
 
-func (r resource) verifyEmailVeriToken(rc *routing.Context) error {
+func (r resource) verifyEmailToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	_, ok := r.service.verifyEmailVerificationToken(rc.Request.Context(), identity.GetID(), rc.Param("token"))
+	err, ok := r.service.verifyEmailToken(rc.Request.Context(), identity.GetID(), rc.Param("token"), strings.ToLower(rc.Param("purpose")))
 	if !ok {
+		if err == errors.InternalServerError("emailTokenExpired"){
+			return errors.InternalServerError("email token expired")
+		}
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}
 	return nil
 }
 
-func (r resource) verifyPhoneVeriToken(rc *routing.Context) error {
+func (r resource) verifyPhoneToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	_, ok := r.service.verifyPhoneVerificationToken(rc.Request.Context(), identity.GetID(), rc.Param("token"))
+	err, ok := r.service.verifyPhoneToken(rc.Request.Context(), identity.GetID(), rc.Param("token"), strings.ToLower(rc.Param("purpose")))
 	if !ok {
+		if err == errors.InternalServerError("phoneTokenExpired"){
+			return errors.InternalServerError("phone token expired")
+		}
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}
 	return nil
@@ -259,21 +414,21 @@ func (r resource) setupTOTP(rc *routing.Context) error {
 		return errors.InternalServerError("an error occurred while setting up the TOTP")
 	}
 	type data struct {
-		Key       string `json:"key"`
+		SecretKey       string `json:"secretKey"`
 		ImageByte []byte `json:"imageByte"`
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 		Data    data   `json:"data"`
-	}{"success", "TOTP was created successfully", data{Key: key, ImageByte:imageByte}}, http.StatusOK)
+	}{"success", "TOTP was created successfully", data{SecretKey: key, ImageByte: imageByte}}, http.StatusOK)
 
 }
 
 func (r resource) validateTOTPFirstTime(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	if ok := r.service.validateTOTPFirstTime(rc.Request.Context(), identity.GetID(), rc.Param("passcode"),
-		rc.Param("secret")); !ok {
+	if ok := r.service.validateTOTPFirstTime(rc.Request.Context(), identity.GetID(), identity.GetEmail(),
+		rc.Param("passcode"), rc.Param("secret")); !ok {
 		return errors.InternalServerError("an error occurred while validating totp for the first time")
 	}
 	return rc.WriteWithStatus(struct {
@@ -282,7 +437,7 @@ func (r resource) validateTOTPFirstTime(rc *routing.Context) error {
 	}{"success", "TOTP was setup successfully"}, http.StatusOK)
 }
 
-func (r resource) validateTOTP (rc *routing.Context) error {
+func (r resource) validateTOTP(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	if ok := r.service.validateTOTP(rc.Request.Context(), rc.Param("passcode"), identity.GetTOTPSecret()); !ok {
 		return errors.InternalServerError("an error occurred while validating totp")
@@ -291,4 +446,19 @@ func (r resource) validateTOTP (rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}{"success", "TOTP was setup successfully"}, http.StatusOK)
+}
+
+func (r resource) setup2FA(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	err := r.service.set2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), identity.GetPhone(), strings.ToLower(rc.Param("type")))
+	if err != nil {
+		if err == errors.InternalServerError("emailFaulty") {
+			return errors.InternalServerError("email is not verified")
+		}
+		return errors.InternalServerError("an error occurred while verifying the token")
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "activated successfully"}, http.StatusOK)
 }

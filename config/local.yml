@@ -1,16 +1,15 @@
-dsn: "postgres://127.0.0.1/monitridb?sslmode=disable&user=postgres&password=joker"
-jwt_access_token_signing_key: "LxsKJywDL5O5PvgODZhBH12KE6k2yL8E"
-jwt_refresh_token_signing_key: "ODZhBH12KE6k2yL8ELxsKJywDL5O5Pvg"
-redis_dsn: "localhost:6379"
-access_token_expiration: 1
-refresh_token_expiration: 24
-
-#SMS credentials
-sms_api_url: "https://api.africastalking.com/version1/messaging"
-sms_username: "phoneVeriNotif"
-
-#Email Credentials
-email_host: "in-v3.mailjet.com"
-email_host_port: 587
-email_from: "monitrillc@gmail.com"
-email_password: ""
+#dsn: "postgres://127.0.0.1/monitridb?sslmode=disable&user=postgres&password=joker"
+#jwt_access_token_signing_key: "LxsKJywDL5O5PvgODZhBH12KE6k2yL8E"
+#jwt_refresh_token_signing_key: "ODZhBH12KE6k2yL8ELxsKJywDL5O5Pvg"
+#redis_dsn: "localhost:6379"
+#access_token_expiration: 1
+#refresh_token_expiration: 24
+#
+##SMS credentials
+#sms_api_url: "https://api.africastalking.com/version1/messaging"
+#sms_username: "phoneVeriNotif"
+#
+##Email Credentials
+#email_username: "40afbd4763e71812ae3266ffa6dfa366"
+#email_password: "d4b5d33ba9abb93ddef368bebc347d3d"
+#email_from: "no-reply@monitri.com"

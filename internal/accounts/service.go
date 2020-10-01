@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -35,23 +36,28 @@ type Service interface {
 	UpdateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error)
 	DeleteById(ctx context.Context, id string) error
 	GetAccounts(ctx context.Context, offset, limit int) ([]Account, error)
-	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error)
+	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string)
 	CreateAccount(ctx context.Context, req CreateAccountsRequest) error
 	ChangePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
 	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
-	checkAuthKeyIfExist(conn redis.Conn, key string) (string, error)
+	checkIfKeyExist(conn redis.Conn, key string) (string, error)
 	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
 	generateTokens(identity Identity) (*TokenDetails, error)
 	getAccountIdEmailPhone(ctx context.Context, id string) Identity
 	refreshToken(identity Identity, redisConn redis.Conn, key string, tokenDetails *TokenDetails) (*TokenDetails, error)
-	generateAndSendEmailVerificationToken(ctx context.Context, receiverEmail string) error
-	verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool)
-	verifyPhoneVerificationToken(ctx context.Context, id, token string) (error, bool)
+	generateAndSendEmailToken(ctx context.Context, receiverEmail, purpose string) error
+	verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool)
+	verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
-	generateAndSendPhoneVerificationToken(ctx context.Context, receiverPhone string) error
+	generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error
 	setupTOTP(ctx context.Context, email string) (string, []byte, error)
-	validateTOTPFirstTime(ctx context.Context, id, passcode, secret string) bool
+	validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool
 	validateTOTP(ctx context.Context, passcode, secret string) bool
+	LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	set2FA(ctx context.Context, id, email, phone, Type string) error
+	flagIP(conn redis.Conn, ip string) error
 }
 
 // Identity represents an authenticated accounts identity.
@@ -79,6 +85,10 @@ type Account struct {
 	entity.Accounts
 }
 
+type Settings struct {
+	entity.Settings
+}
+
 type TokenDetails struct {
 	AccessToken  string
 	RefreshToken string
@@ -93,6 +103,12 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type AdditionalSecLoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Token    string `json:"token"`
+}
+
 type CreateAccountsRequest struct {
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
@@ -104,20 +120,12 @@ type ChangePasswordRequest struct {
 }
 
 type UpdateAccountRequest struct {
-	Firstname          string `json:"firstname"`
-	Middlename         string `json:"middlename"`
-	Lastname           string `json:"lastname"`
-	Dob                string `json:"dob"`
-	Password           string `json:"password"`
-	Address            string `json:"address"`
-	Bankname           string `json:"bankname"`
-	BankAccountNo      string `json:"bank_account_no"`
-	ConfirmedEmail     int    `json:"confirmed_email"`
-	ConfirmEmailToken  *big.Int
-	ConfirmEmailExpiry int64
-	ConfirmedPhone     int    `json:"confirmed_phone"`
-	Managed            int    `json:"managed"`
-	AccountManagerId   string `json:"account_manager_id"`
+	Firstname          string `json:"firstname,omitempty"`
+	Middlename         string `json:"middlename,omitempty"`
+	Lastname           string `json:"lastname,omitempty"`
+	Dob                string `json:"dob,omitempty"`
+	Password           string `json:"password,omitempty"`
+	Address            string `json:"address,omitempty"`
 }
 
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
@@ -133,6 +141,13 @@ func (lr LoginRequest) validate() error {
 		validation.Field(&lr.Password, validation.Required))
 }
 
+func (aslr AdditionalSecLoginRequest) validate() error {
+	return validation.ValidateStruct(&aslr,
+		validation.Field(&aslr.Email, validation.Required, is.Email),
+		validation.Field(&aslr.Password, validation.Required),
+		validation.Field(&aslr.Token, validation.Required))
+}
+
 func (car CreateAccountsRequest) validate() error {
 	return validation.ValidateStruct(&car,
 		validation.Field(&car.Email, validation.Required, is.Email),
@@ -142,19 +157,18 @@ func (car CreateAccountsRequest) validate() error {
 
 func (uar UpdateAccountRequest) validate() error {
 	return validation.ValidateStruct(&uar,
-		validation.Field(&uar.Firstname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
+		validation.Field(&uar.Firstname, validation.Required, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Middlename, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-		validation.Field(&uar.Lastname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
+		validation.Field(&uar.Lastname, validation.Required, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Dob, validation.Required,
-			validation.Match(regexp.MustCompile("^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$"))),
-		validation.Field(&uar.Password, validation.Length(8, 0)),
-		validation.Field(&uar.Address, is.Alphanumeric),
-		validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-		validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
-		validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
-		validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
-		validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
-		validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
+			validation.Match(regexp.MustCompile("^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])+$"))),
+		validation.Field(&uar.Address, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))))
+		//validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
+		//validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
+		//validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
+		//validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
+		//validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
+		//validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
 }
 
 func (cpr ChangePasswordRequest) validate() error {
@@ -168,6 +182,14 @@ func (s service) GetById(ctx context.Context, id string) (Account, error) {
 		return Account{}, err
 	}
 	return Account{account}, err
+}
+
+func (s service) GetSettingsById(ctx context.Context, id string) (Settings, error) {
+	settingsAccount, err := s.repo.GetSettingsById(ctx, id)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{settingsAccount}, err
 }
 
 func (s service) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -238,11 +260,69 @@ func (s service) GetAccounts(ctx context.Context, offset, limit int) ([]Account,
 
 // Login authenticates a accounts and generates a JWT token if authentication succeeds.
 // Otherwise, an error is returned.
-func (s service) Login(ctx context.Context, req LoginRequest) (*TokenDetails, error) {
+func (s service) Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
+	if err := req.validate(); err != nil {
+		return nil, err, ""
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+
+		settingsInfo, _ := s.repo.GetSettingsById(ctx, identity.GetID())
+
+		if settingsInfo.TwofaGoogleAuth == 1 {
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "mobile2FA"
+		} else if settingsInfo.TwofaEmail == 1 {
+			_ = s.generateAndSendEmailToken(ctx, req.Email, "login2fa")
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "email2FA"
+		} else if settingsInfo.TwofaPhone == 1 {
+			_ = s.generateAndSendPhoneToken(ctx, identity.GetPhone(), "login2fa")
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "phone2FA"
+		} else {
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, ""
+		}
+	}
+	return nil, errors.Unauthorized(""), ""
+}
+
+func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
 	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		if ok := totp.Validate(req.Token, identity.GetTOTPSecret()); !ok {
+			return nil, errors.Unauthorized("")
+		}
+		return s.generateTokens(identity)
+	}
+	return nil, errors.Unauthorized("")
+}
+
+func (s service) LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		_, ok := s.verifyEmailToken(ctx, identity.GetID(), req.Token, "login2fa")
+		if !ok {
+			return nil, errors.Unauthorized("")
+		}
+		return s.generateTokens(identity)
+	}
+	return nil, errors.Unauthorized("")
+}
+
+func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		_, ok := s.verifyPhoneToken(ctx, identity.GetID(), req.Token, "login2fa")
+		if !ok {
+			return nil, errors.Unauthorized("")
+		}
 		return s.generateTokens(identity)
 	}
 	return nil, errors.Unauthorized("")
@@ -503,71 +583,122 @@ func (s service) generateRefreshToken(identity Identity, tokenUUID string, expir
 	}).SignedString([]byte(s.RefreshTokenSigningKey))
 }
 
-func (s service) generateAndSendEmailVerificationToken(ctx context.Context, receiverEmail string) error {
+func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, purpose string) error {
 	logger := s.logger.With(ctx, "account", receiverEmail)
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
-	t, _ := template.ParseFiles("internal/email/emailVerificationTokenTemplate.gohtml")
-	var body bytes.Buffer
-	_ = t.Execute(&body, struct {
-		Token *big.Int
-	}{
-		Token: RandomCrypto,
-	})
-	account, err := s.GetAccountByEmail(ctx, receiverEmail)
-	if err != nil {
-		logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
-		return err
-	}
-	account.ConfirmEmailToken = int(RandomCrypto.Int64())
-	account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
+	if purpose == "login2fa" {
+		t, _ := template.ParseFiles("internal/email/email2FANotificationEmailTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Token *big.Int
+		}{
+			Token: RandomCrypto,
+		})
+		account, err := s.GetAccountByEmail(ctx, receiverEmail)
+		if err != nil {
+			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
+			return err
+		}
+		account.LoginEmailToken = int(RandomCrypto.Int64())
+		account.LoginEmailExpiry = time.Now().Add(time.Duration(5) * time.Minute).Unix()
 
-	updateErr := s.repo.Update(ctx, account.Accounts)
-	if updateErr != nil {
-		logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
-			"The error: %s, updateErr")
-		return updateErr
+		updateErr := s.repo.Update(ctx, account.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+				"The error: %s, updateErr")
+			return updateErr
+		}
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(receiverEmail, "2FA login Token", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
 	}
-	contentToString := string(body.Bytes())
-	sendmailErr := s.emailService.SendEmail(receiverEmail, "Email verification", contentToString)
-	if sendmailErr != nil {
-		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-		return sendmailErr
+
+	if purpose == "verification" {
+		t, _ := template.ParseFiles("internal/email/emailVerificationTokenTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Token *big.Int
+		}{
+			Token: RandomCrypto,
+		})
+		account, err := s.GetAccountByEmail(ctx, receiverEmail)
+		if err != nil {
+			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
+			return err
+		}
+		account.ConfirmEmailToken = int(RandomCrypto.Int64())
+		account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
+
+		updateErr := s.repo.Update(ctx, account.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+				"The error: %s, updateErr")
+			return updateErr
+		}
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(receiverEmail, "Confirm email address", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
 	}
 	return nil
 }
 
-func (s service) verifyEmailVerificationToken(ctx context.Context, id, token string) (error, bool) {
+func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s, err")
 		return err, false
 	}
-	tokenExpiry := time.Unix(acc.ConfirmEmailExpiry, 0)
-	now := time.Now()
+	if purpose == "login2fa" {
+		tokenExpiry := time.Unix(acc.LoginEmailExpiry, 0)
+		now := time.Now()
 
-	if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
-		logger.Errorf("email token expired")
-		return nil, false
+		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
+			logger.Errorf("email token expired")
+			return errors.InternalServerError("emailTokenExpired"), false
+		}
+
+		i, _ := strconv.Atoi(token)
+
+		if i != acc.LoginEmailToken {
+			return nil, false
+		}
+		//fmt.Println("he")
 	}
 
-	i, _ := strconv.Atoi(token)
+	if purpose == "verification" {
+		tokenExpiry := time.Unix(acc.ConfirmEmailExpiry, 0)
+		now := time.Now()
 
-	if i != acc.ConfirmEmailToken {
-		return nil, false
-	}
+		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
+			logger.Errorf("email token expired")
+			return errors.InternalServerError("emailTokenExpired"), false
+		}
 
-	acc.ConfirmedEmail = 1
-	updateErr := s.repo.Update(ctx, acc.Accounts)
-	if updateErr != nil {
-		logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n" +
-			"The error: %s, err")
+		i, _ := strconv.Atoi(token)
+
+		if i != acc.ConfirmEmailToken {
+			return nil, false
+		}
+
+		acc.ConfirmedEmail = 1
+		updateErr := s.repo.Update(ctx, acc.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n" +
+				"The error: %s, err")
+		}
 	}
 
 	return nil, true
 }
 
-func (s service) generateAndSendPhoneVerificationToken(ctx context.Context, receiverPhone string) error {
+func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error {
 	logger := s.logger.With(ctx, "account", receiverPhone)
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 	account, err := s.GetAccountByPhone(ctx, receiverPhone)
@@ -575,53 +706,190 @@ func (s service) generateAndSendPhoneVerificationToken(ctx context.Context, rece
 		logger.Errorf("an error occurred while trying to get account by phone.\nThe error: %s", err)
 		return err
 	}
-	account.ConfirmPhoneToken = int(RandomCrypto.Int64())
-	account.ConfirmPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
-	updateErr := s.repo.Update(ctx, account.Accounts)
-	if updateErr != nil {
-		logger.Errorf("an error occurred while trying to update the token to the account row.\n"+
-			"The error: %s", updateErr)
-		return updateErr
+
+	if purpose == "login2fa" {
+		account.LoginPhoneToken = int(RandomCrypto.Int64())
+		account.LoginPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
+		account.UpdatedAt = time.Now()
+		updateErr := s.repo.Update(ctx, account.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update the token to the account row.\n"+
+				"The error: %s", updateErr)
+			return updateErr
+		}
+
+		tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
+
+		_, ok := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your login 2FA token is "+tokenToString+
+			". it expires in 10 minutes")
+		if !ok {
+			logger.Errorf("an error occurred while trying to send token to mobile")
+			return nil
+		}
 	}
-	tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
-	_, ok := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
-		". it expires in 10 minutes")
-	if !ok {
-		logger.Errorf("an error occurred while trying to send token to mobile")
-		return nil
+
+	if purpose == "verification" {
+		account.ConfirmPhoneToken = int(RandomCrypto.Int64())
+		account.ConfirmPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
+		account.UpdatedAt = time.Now()
+		updateErr := s.repo.Update(ctx, account.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update the token to the account row.\n"+
+				"The error: %s", updateErr)
+			return updateErr
+		}
+
+		tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
+
+		_, ok := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
+			". it expires in 10 minutes")
+		fmt.Println("here")
+		if !ok {
+			logger.Errorf("an error occurred while trying to send token to mobile")
+			return nil
+		}
 	}
+
 	return nil
 }
 
-func (s service) verifyPhoneVerificationToken(ctx context.Context, id, token string) (error, bool) {
+func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s, err")
 		return err, false
 	}
-	tokenExpiry := time.Unix(acc.ConfirmPhoneExpiry, 0)
-	now := time.Now()
+	if purpose == "login2fa" {
+		tokenExpiry := time.Unix(acc.LoginPhoneExpiry, 0)
+		now := time.Now()
 
-	if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
-		logger.Errorf("phone token expired")
-		return nil, false
+		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
+			logger.Errorf("phone token expired")
+			return errors.InternalServerError("phoneTokenExpired"), false
+		}
+
+		i, _ := strconv.Atoi(token)
+
+		if i != acc.LoginPhoneToken {
+			return nil, false
+		}
 	}
 
-	i, _ := strconv.Atoi(token)
+	if purpose == "verification" {
+		tokenExpiry := time.Unix(acc.ConfirmPhoneExpiry, 0)
+		now := time.Now()
 
-	if i != acc.ConfirmPhoneToken {
-		return nil, false
-	}
+		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
+			logger.Errorf("phone token expired")
+			return errors.InternalServerError("phoneTokenExpired"), false
+		}
 
-	acc.ConfirmedPhone = 1
-	updateErr := s.repo.Update(ctx, acc.Accounts)
-	if updateErr != nil {
-		logger.Errorf("an error occurred while trying to update confirmed phone status after veri.\n" +
-			"The error: %s, err")
+		i, _ := strconv.Atoi(token)
+
+		if i != acc.ConfirmPhoneToken {
+			return nil, false
+		}
+
+		acc.ConfirmedPhone = 1
+		updateErr := s.repo.Update(ctx, acc.Accounts)
+		if updateErr != nil {
+			logger.Errorf("an error occurred while trying to update confirmed phone status after veri.\n" +
+				"The error: %s, err")
+		}
 	}
 
 	return nil, true
+}
+
+func (s service) set2FA(ctx context.Context, id, email, phone, Type string) error {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.GetById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
+		return err
+	}
+	if Type == "phone" {
+		if acc.ConfirmedPhone != 1 {
+			logger.Errorf("phone number has not been verified\nThe error: %s, err")
+			return err
+		}
+
+		setAcct, err := s.GetSettingsById(ctx, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				if err := s.repo.CreateSettings(ctx, entity.Settings{
+					AccountId:  acc.Id,
+					TwofaPhone: 1,
+				}); err != nil {
+					logger.Errorf("could not insert into settings row\nThe error: %s", err)
+					return err
+				}
+			}
+			logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
+		} else {
+			setAcct.TwofaPhone = 1
+			err := s.repo.UpdateSettings(ctx, setAcct.Settings)
+			if err != nil {
+				logger.Errorf("an error occurred while trying to update settings phone ver. The error: %s", err)
+			}
+		}
+		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Message string
+		}{
+			Message: "2FA has been enabled on your mobile number: " + phone + ". \nThis would be active if google authenticator and email 2FA is not activated",
+		})
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
+	}
+
+	if Type == "email" {
+		if acc.ConfirmedEmail != 1 {
+			logger.Errorf("email has not been verified\nThe error: %s", err)
+			return errors.InternalServerError("emailFaulty")
+		}
+
+		setAcct, err := s.GetSettingsById(ctx, id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				if err := s.repo.CreateSettings(ctx, entity.Settings{
+					AccountId:  acc.Id,
+					TwofaEmail: 1,
+				}); err != nil {
+					logger.Errorf("could not insert into settings row\nThe error: %s", err)
+					return err
+				}
+			}
+			logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
+		} else {
+			setAcct.TwofaEmail = 1
+			err := s.repo.UpdateSettings(ctx, setAcct.Settings)
+			if err != nil {
+				logger.Errorf("an error occurred while trying to update settings email ver.The error: %s", err)
+				return err
+			}
+		}
+		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Message string
+		}{
+			Message: "2FA has been enabled on your email: " + email + ". \nThis would be active if google authenticator 2FA is not activated",
+		})
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
+	}
+	return nil
 }
 
 func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, error) {
@@ -642,7 +910,7 @@ func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, e
 	return key.Secret(), buf.Bytes(), nil
 }
 
-func (s service) validateTOTPFirstTime(ctx context.Context, id, passcode, secret string) bool {
+func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
@@ -655,13 +923,37 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, passcode, secret
 	}
 	acc.TotpSecret = secret
 	acc.UpdatedAt = time.Now()
-	errr := s.repo.activateAuth2FA(ctx, acc.Accounts, entity.Settings{
-		AccountId: id,
-		TwofaGoogleAuth: 1,
+	setAcct, err := s.GetSettingsById(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, entity.Settings{
+				AccountId:       acc.Id,
+				TwofaGoogleAuth: 1,
+			}, "insert"); errr != nil {
+				logger.Errorf("an error occurred while trying to update totp secret for the acc. The error: %s", errr)
+				return false
+			}
+		}
+		logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
+	} else {
+		setAcct.TwofaGoogleAuth = 1
+		if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, setAcct.Settings, "update"); errr != nil {
+			logger.Errorf("an error occurred while trying to update settings email ver.The error: %s", errr)
+			return false
+		}
+	}
+
+	t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+	var body bytes.Buffer
+	_ = t.Execute(&body, struct {
+		Message string
+	}{
+		Message: "You just activated Google Authenticator 2FA on your account!.",
 	})
-	//updateErr := s.repo.Update(ctx, acc.Accounts)
-	if errr != nil {
-		logger.Errorf("an error occurred while trying to update totp secret for the acc. The error: %s", errr)
+	contentToString := string(body.Bytes())
+	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+	if sendmailErr != nil {
+		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
 		return false
 	}
 	return true
@@ -693,7 +985,7 @@ func (s service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) 
 	return nil
 }
 
-func (s service) checkAuthKeyIfExist(conn redis.Conn, key string) (string, error) {
+func (s service) checkIfKeyExist(conn redis.Conn, key string) (string, error) {
 	val, err := s.repo.GetRedisKey(conn, key)
 	return val, err
 }
@@ -703,5 +995,14 @@ func (s service) logOut(ctx context.Context, conn redis.Conn, keys ...string) er
 	_ = s.repo.DeleteRedisKeys(conn, keys...)
 	logger.Infof("deleted redis key %s", keys)
 
+	return nil
+}
+
+//todo remember to increase the time to 10 minutes (600sec)
+func (s service) flagIP(conn redis.Conn, ip string) error {
+	err := s.repo.SetRedisKey(conn, 180, ip, "malicious user")
+	if err != nil {
+		s.logger.Errorf("an error occurred while trying to store the flaggedIp in redis. The error:%s", err)
+	}
 	return nil
 }

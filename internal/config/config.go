@@ -2,8 +2,8 @@ package config
 
 import (
 	"github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/qiangxue/go-env"
 	"github.com/jokermario/monitri/pkg/log"
+	"github.com/qiangxue/go-env"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 )
@@ -34,14 +34,14 @@ type Config struct {
 	SMSApiUrl string `yaml:"sms_api_url" env:"SMS_API_URL"`
 	//SMS Username
 	SMSUsername string `yaml:"sms_username" env:"SMS_USERNAME"`
+	//SMS APIKEY
+	SMSApiKey string `yaml:"sms_api_key" env:"SMS_API_KEY"`
 	//Email host
-	EmailHost string `yaml:"email_host" env:"EMAIL_FROM"`
-	//Email port
-	EmailHostPort int `yaml:"email_host_port" env:"EMAIL_HOST_PORT"`
+	EmailUsername string `yaml:"email_username" env:"EMAIL_USERNAME"`
+	//Email password
+	EmailPassword string`yaml:"email_password" env:"EMAIL_PASSWORD"`
 	//Email from
 	EmailFrom string `yaml:"email_from" env:"EMAIL_FROM"`
-	//Email Password
-	EmailPassword string `yaml:"email_password" env:"EMAIL_PASSWORD"`
 }
 
 // Validate validates the application configuration.
@@ -71,8 +71,8 @@ func Load(file string, logger log.Logger) (*Config, error) {
 		return nil, err
 	}
 
-	// load from environment variables prefixed with "APP_"
-	if err = env.New("APP_", logger.Infof).Load(&c); err != nil {
+	// load from environment variables prefixed with "MONITRI_"
+	if err = env.New("MONITRI_", logger.Infof).Load(&c); err != nil {
 		return nil, err
 	}
 

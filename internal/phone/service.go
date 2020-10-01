@@ -15,26 +15,27 @@ type Service interface {
 }
 
 type service struct {
-	logger log.Logger
-	SMSApiUrl string
+	logger      log.Logger
+	SMSApiUrl   string
 	SMSUsername string
+	SMSApiKey   string
 }
 
-func NewService(logger log.Logger, SMSApiUrl, SMSUsername string) Service {
-	return service{logger, SMSApiUrl, SMSUsername}
+func NewService(logger log.Logger, SMSApiUrl, SMSUsername, SMSApiKey string) Service {
+	return service{logger, SMSApiUrl, SMSUsername, SMSApiKey}
 }
 
 type recipientsData struct {
-	Cost string `json:"cost,omitempty"`
-	MessageId string `json:"messageId,omitempty"`
-	MessageParts int `json:"messageParts,omitempty"`
-	Number string `json:"number,omitempty"`
-	Status string `json:"status,omitempty"`
-	StatusCode int `json:"statusCode,omitempty"`
+	Cost         string `json:"cost,omitempty"`
+	MessageId    string `json:"messageId,omitempty"`
+	MessageParts int    `json:"messageParts,omitempty"`
+	Number       string `json:"number,omitempty"`
+	Status       string `json:"status,omitempty"`
+	StatusCode   int    `json:"statusCode,omitempty"`
 }
 
 type smsMessageData struct {
-	Message string `json:"Message,omitempty"`
+	Message    string           `json:"Message,omitempty"`
 	Recipients []recipientsData `json:"Recipients,omitempty"`
 }
 
@@ -54,10 +55,10 @@ func (s service) SendSMSToMobile(to, message string) (error, bool) {
 	nonce := entity.GenerateID()
 
 	req, _ := http.NewRequest(http.MethodPost, urlToString, strings.NewReader(data.Encode()))
-	req.Header.Add( "apiKey", "5c8d05934f4fb3e1d625100636d20aa2dc148aebc3c04c0f8f44d5f8cc2a7e1c" )
-	req.Header.Add( "Content-Type", "application/x-www-form-urlencoded; charset=UTF-8" )
-	req.Header.Add( "Accept", "application/json; charset=UTF-8" )
-	req.Header.Add( "Idempotency-Key", nonce )
+	req.Header.Add("apiKey", s.SMSApiKey)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Add("Accept", "application/json; charset=UTF-8")
+	req.Header.Add("Idempotency-Key", nonce)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

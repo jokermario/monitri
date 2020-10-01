@@ -30,6 +30,17 @@ var Version = "1.0.0"
 
 var flagConfig = flag.String("config", "./config/local.yml", "path to the config file")
 
+//func init() {
+//	if _, err := os.Stat("/path/to/whatever"); os.IsNotExist(err) {
+//		f, err := os.Create("monitri.log")
+//		if err != nil {
+//			fmt.Println(err)
+//			_ = f.Close()
+//			return
+//		}
+//	}
+//}
+
 func main() {
 	flag.Parse()
 	// create root logger tagged with server version
@@ -110,11 +121,10 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 			logger,
 			email.NewService(
 				logger,
-				cfg.EmailHost,
-				cfg.EmailHostPort,
-				cfg.EmailFrom,
-				cfg.EmailPassword),
-			phone.NewService(logger, cfg.SMSApiUrl, cfg.SMSUsername),
+				cfg.EmailUsername,
+				cfg.EmailPassword,
+				cfg.EmailFrom),
+			phone.NewService(logger, cfg.SMSApiUrl, cfg.SMSUsername, cfg.SMSApiKey),
 			cfg.AccessTokenSigningKey,
 			cfg.RefreshTokenSigningKey,
 			cfg.AccessTokenExpiration,

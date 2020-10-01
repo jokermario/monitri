@@ -1,107 +1,99 @@
 package email
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/jokermario/monitri/pkg/log"
-	"io/ioutil"
-	"net/http"
-	"strings"
-
+	"github.com/mailjet/mailjet-apiv3-go"
 	//"github.com/sendgrid/rest"
 	//"github.com/sendgrid/sendgrid-go"
 	//"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
-const mailUsername string = "40afbd4763e71812ae3266ffa6dfa366"
-const mailPassword string = "d4b5d33ba9abb93ddef368bebc347d3d"
 type Service interface {
 	SendEmail(toInput, subject, htmlContent string) error
 }
 
 type service struct {
 	logger log.Logger
-	emailHost string
-	emailHostPort int
-	emailFrom string
+	emailUsername string
 	emailPassword string
+	emailFrom string
 }
 
-func NewService(logger log.Logger, emailHost string, emailHostPort int, emailFrom, emailPassword string) Service {
-	return service{logger, emailHost, emailHostPort, emailFrom,
-		emailPassword}
+func NewService(logger log.Logger, emailUsername, emailPassword, emailFrom string) Service {
+	return service{logger, emailUsername, emailPassword, emailFrom}
 }
 
 func (s service) SendEmail(toInput, subject, htmlContent string) error {
 	//DIRECT MAIL USING SENDINBLUE
-	type sender struct {
-		Name string `json:"name"`
-		Email string `json:"email"`
-	}
-	type to struct {
-		Email string `json:"email"`
-		Name string `json:"name"`
-	}
-	type payload struct {
-		Sender sender `json:"sender"`
-		To []to `json:"to"`
-		Subject string `json:"subject"`
-		HtmlContent string `json:"htmlContent"`
-	}
-	requestPayload := payload{
-		Sender: sender{Name:"Monitri", Email:"monitrillc@gmail.com"},
-		To: []to{{Email:toInput, Name:""}},
-		Subject: subject,
-		HtmlContent: htmlContent,
-	}
-	sentJsonPayload, err := json.Marshal(requestPayload)
-	if err != nil {
-		s.logger.Errorf("an error occurred while tying to build json:", err)
-	}
-
-	urll := "https://api.sendinblue.com/v3/smtp/email"
-	fmt.Println(strings.NewReader(string(sentJsonPayload)))
-	req, _ := http.NewRequest(http.MethodPost, urll, strings.NewReader(string(sentJsonPayload)))
-	req.Header.Add( "api-key", "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" )
-	req.Header.Add( "content-type", "application/json" )
-	req.Header.Add( "accept", "application/json" )
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		s.logger.Errorf("Error:", err)
-	}
-	defer resp.Body.Close()
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
-	return nil
-	//MAILJET
-	//mailjetClient := mailjet.NewMailjetClient(mailUsername, mailPassword)
-	//messagesInfo := []mailjet.InfoMessagesV31 {
-	//	mailjet.InfoMessagesV31{
-	//		From: &mailjet.RecipientV31{
-	//			Email: s.emailFrom,
-	//			Name: "Monitri",
-	//		},
-	//		To: &mailjet.RecipientsV31{
-	//			mailjet.RecipientV31 {
-	//				Email: toInput,
-	//				Name: "",
-	//			},
-	//		},
-	//		Subject: subject,
-	//		TextPart: "My first Mailjet email",
-	//		HTMLPart: htmlContent,
-	//		CustomID: "AppGettingStartedTest",
-	//	},
+	//type sender struct {
+	//	Name string `json:"name"`
+	//	Email string `json:"email"`
 	//}
-	//messages := mailjet.MessagesV31{Info: messagesInfo }
-	//res, err := mailjetClient.SendMailV31(&messages)
+	//type to struct {
+	//	Email string `json:"email"`
+	//	Name string `json:"name"`
+	//}
+	//type payload struct {
+	//	Sender sender `json:"sender"`
+	//	To []to `json:"to"`
+	//	Subject string `json:"subject"`
+	//	HtmlContent string `json:"htmlContent"`
+	//}
+	//requestPayload := payload{
+	//	Sender: sender{Name:"Monitri", Email:"monitrillc@gmail.com"},
+	//	To: []to{{Email:toInput, Name:""}},
+	//	Subject: subject,
+	//	HtmlContent: htmlContent,
+	//}
+	//sentJsonPayload, err := json.Marshal(requestPayload)
 	//if err != nil {
-	//	s.logger.Error(err)
+	//	s.logger.Errorf("an error occurred while tying to build json:", err)
 	//}
-	//fmt.Printf("Data: %+v\n", res)
+	//
+	//urll := "https://api.sendinblue.com/v3/smtp/email"
+	//fmt.Println(strings.NewReader(string(sentJsonPayload)))
+	//req, _ := http.NewRequest(http.MethodPost, urll, strings.NewReader(string(sentJsonPayload)))
+	//req.Header.Add( "api-key", "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" )
+	//req.Header.Add( "content-type", "application/json" )
+	//req.Header.Add( "accept", "application/json" )
+	//
+	//resp, err := http.DefaultClient.Do(req)
+	//if err != nil {
+	//	s.logger.Errorf("Error:", err)
+	//}
+	//defer resp.Body.Close()
+	//fmt.Println("response Status:", resp.Status)
+	//fmt.Println("response Headers:", resp.Header)
+	//body, _ := ioutil.ReadAll(resp.Body)
+	//fmt.Println("response Body:", string(body))
 	//return nil
+	//MAILJET
+	mailjetClient := mailjet.NewMailjetClient(s.emailUsername, s.emailPassword)
+	messagesInfo := []mailjet.InfoMessagesV31 {
+		mailjet.InfoMessagesV31{
+			From: &mailjet.RecipientV31{
+				Email: s.emailFrom,
+				Name: "Monitri",
+			},
+			To: &mailjet.RecipientsV31{
+				mailjet.RecipientV31 {
+					Email: toInput,
+					Name: "",
+				},
+			},
+			Subject: subject,
+			//TextPart: "M",
+			HTMLPart: htmlContent,
+			//CustomID: "",
+		},
+	}
+	messages := mailjet.MessagesV31{Info: messagesInfo }
+	res, err := mailjetClient.SendMailV31(&messages)
+	if err != nil {
+		s.logger.Error(err)
+	}
+	fmt.Printf("Data: %+v\n", res)
+	return nil
 	//DIRECT MAIL SENDING WITH GOMAIL
 	//m := gomail.NewMessage()
 	//m.SetHeader("From", m.FormatAddress(s.emailFrom, "Monitri"))

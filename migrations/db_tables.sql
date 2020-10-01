@@ -2,10 +2,10 @@ DROP TABLE IF EXISTS transactions;
 DROP TABLE IF EXISTS wallets;
 DROP TABLE IF EXISTS settings;
 DROP TABLE IF EXISTS accounts;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS accounts
                             (
-                                sn SERIAL,
-                                id VARCHAR(50) UNIQUE NOT NULL,
+                                id VARCHAR(50) UNIQUE NOT NULL PRIMARY KEY,
                                 firstname VARCHAR(50) NULL,
                                 middlename VARCHAR(50) NULL,
                                 lastname VARCHAR(50) NULL,
@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS accounts
                                 confirmed_phone INTEGER NOT NULL DEFAULT 0,
                                 confirm_phone_token INTEGER NULL,
                                 confirm_phone_expiry INTEGER NULL,
+                                login_email_token INTEGER NULL,
+                                login_email_expiry INTEGER NULL,
+                                login_phone_token INTEGER NULL,
+                                login_phone_expiry INTEGER NULL,
                                 managed INTEGER NOT NULL DEFAULT 0,
                                 account_manager_id VARCHAR(50) NULL,
                                 totp_secret TEXT NULL,
@@ -30,7 +34,7 @@ CREATE TABLE IF NOT EXISTS accounts
                             );
 CREATE TABLE IF NOT EXISTS transactions
                             (
-                                sn SERIAL,
+                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
                                 account_id VARCHAR(50) NOT NULL,
                                 transaction_id VARCHAR(200) NOT NULL,
                                 amount INTEGER NOT NULL,
@@ -52,7 +56,7 @@ CREATE TABLE IF NOT EXISTS transactions
                             );
 CREATE TABLE IF NOT EXISTS wallets
                             (
-                                sn SERIAL,
+                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
                                 account_id VARCHAR(50) NOT NULL,
                                 wallet_id VARCHAR(300) NOT NULL,
                                 amount_in_wallet INTEGER NOT NULL,
@@ -60,8 +64,8 @@ CREATE TABLE IF NOT EXISTS wallets
                             );
 CREATE TABLE IF NOT EXISTS settings
                             (
-                                sn SERIAL,
-                                account_id VARCHAR(50) NOT NULL,
+                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                account_id VARCHAR(50) UNIQUE NOT NULL,
                                 twoFA_email INTEGER NOT NULL DEFAULT 0,
                                 twoFA_phone INTEGER NOT NULL DEFAULT 0,
                                 twoFA_google_auth INTEGER NOT NULL DEFAULT 0,
@@ -69,6 +73,6 @@ CREATE TABLE IF NOT EXISTS settings
                                 anti_phishing_token VARCHAR(50) NULL
                             );
 
-ALTER TABLE transactions ADD CONSTRAINT fk_trans_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON DELETE CASCADE;
-ALTER TABLE wallets ADD CONSTRAINT fk_wallet_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON DELETE CASCADE;
-ALTER TABLE settings ADD CONSTRAINT fk_settings_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON DELETE CASCADE;
+ALTER TABLE transactions ADD CONSTRAINT fk_trans_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON UPDATE CASCADE ON DELETE CASCADE;
+ALTER TABLE wallets ADD CONSTRAINT fk_wallet_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON UPDATE CASCADE ON DELETE CASCADE;
+ALTER TABLE settings ADD CONSTRAINT fk_settings_accounts FOREIGN KEY (account_id) REFERENCES accounts (id) ON UPDATE CASCADE ON DELETE CASCADE;

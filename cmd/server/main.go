@@ -11,6 +11,7 @@ import (
 	"github.com/go-ozzo/ozzo-routing/v2/cors"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/accounts"
+	"github.com/jokermario/monitri/internal/accounts/transaction"
 	"github.com/jokermario/monitri/internal/config"
 	"github.com/jokermario/monitri/internal/email"
 	"github.com/jokermario/monitri/internal/errors"
@@ -171,7 +172,8 @@ func redisConnPool(redisDSN string) *redis.Pool{
 		MaxActive: 12000,
 		//Dial is an application supplied function for creating and configuring a connection
 		Dial: func() (redis.Conn, error) {
-			conn, err := redis.Dial("tcp", redisDSN)
+			//conn, err := redis.Dial("tcp", redisDSN)
+			conn, err := redis.Dial("tcp", redisDSN, redis.DialUsername("redis-dev-monitri-9967345"), redis.DialPassword("JSI1RtAQ1NXO6AU4vYh0bifDGgEc2jcZ"))
 			if err != nil {
 				panic(err.Error())
 			}

@@ -11,7 +11,7 @@ import (
 	"github.com/go-ozzo/ozzo-routing/v2/cors"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/accounts"
-	"github.com/jokermario/monitri/internal/accounts/transaction"
+	//"github.com/jokermario/monitri/internal/accounts/transaction"
 	"github.com/jokermario/monitri/internal/config"
 	"github.com/jokermario/monitri/internal/email"
 	"github.com/jokermario/monitri/internal/errors"

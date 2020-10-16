@@ -173,7 +173,7 @@ func redisConnPool(redisDSN string) *redis.Pool{
 		//Dial is an application supplied function for creating and configuring a connection
 		Dial: func() (redis.Conn, error) {
 			//conn, err := redis.Dial("tcp", redisDSN)
-			conn, err := redis.Dial("tcp", redisDSN, redis.DialUsername("app186200341"), redis.DialPassword("JSI1RtAQ1NXO6AU4vYh0bifDGgEc2jcZ"))
+			conn, err := redis.Dial("tcp", redisDSN, redis.DialUsername("monitri-test"), redis.DialPassword("QWERTYuiop12345$"))
 			if err != nil {
 				panic(err.Error())
 			}

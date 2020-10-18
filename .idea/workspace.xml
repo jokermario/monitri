@@ -19,19 +19,7 @@
     <select />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cmd/server/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/server/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/local.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config/local.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/accounts/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/middleware.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/accounts/repository.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/repository.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/accounts/throttleIP.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/throttleIP.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/entity/transaction.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/transaction.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/entity/wallet.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/wallet.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/migrations/db_tables.sql" beforeDir="false" afterPath="$PROJECT_DIR$/migrations/db_tables.sql" afterDir="false" />
-    </list>
+    <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

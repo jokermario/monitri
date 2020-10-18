@@ -515,12 +515,12 @@ func (r resource) setup2FA(rc *routing.Context) error {
 
 func (r resource) checkAccountVerificationStatus (rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	_, mssg, ok := r.service.completedVerification(rc.Request.Context(), identity.GetID())
-	if !ok {
+	_, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetID())
+	if mssg != "" {
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-		}{"failed", mssg+"\n"}, http.StatusOK)
+		}{"failed", mssg}, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

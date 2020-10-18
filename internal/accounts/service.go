@@ -344,23 +344,24 @@ func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 func (s service) completedVerification(ctx context.Context, id string)(error, string, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
+	var errstrings []string
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
-		return err, "", false
 	}
 	if acc.ConfirmedEmail != 1{
-		return nil, "email has not been verified.", false
+		errstrings = append(errstrings, "email has not been verified.")
 	}
 	if acc.ConfirmedPhone != 1{
-		return nil, "phone has not been verified.", false
+		errstrings = append(errstrings, "phone has not been verified.")
 	}
 	if acc.Dob != ""{
-		return nil, "profile has not been updated.", false
+		errstrings = append(errstrings, "profile has not been updated.")
 	}
+
 	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
 	//	return nil, "email and phone has not been verified, and profile has not been updated", false
 	//}
-	return nil, "", true
+	return nil, strings.Join(errstrings, "\n"), true
 }
 
 // authenticate authenticates a accounts using username and password.

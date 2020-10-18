@@ -62,7 +62,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, id string)(error, string, bool)
+	completedVerification(ctx context.Context, id string)(error, []string, bool)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -341,27 +341,27 @@ func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) completedVerification(ctx context.Context, id string)(error, string, bool) {
+func (s service) completedVerification(ctx context.Context, id string)(error, []string, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	var errstrings []string
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
 	}
-	if acc.ConfirmedEmail != 1{
-		errstrings = append(errstrings, "email has not been verified.")
+	if acc.ConfirmedEmail != 1 {
+		errstrings = append(errstrings, "email not verified")
 	}
-	if acc.ConfirmedPhone != 1{
-		errstrings = append(errstrings, "phone has not been verified.")
+	if acc.ConfirmedPhone != 1 {
+		errstrings = append(errstrings, "phone not verified")
 	}
-	if acc.Dob != ""{
-		errstrings = append(errstrings, "profile has not been updated.")
+	if acc.Dob == "" {
+		errstrings = append(errstrings, "profile not updated")
 	}
 
 	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
 	//	return nil, "email and phone has not been verified, and profile has not been updated", false
 	//}
-	return nil, strings.Join(errstrings, "\n"), true
+	return nil, errstrings, true
 }
 
 // authenticate authenticates a accounts using username and password.

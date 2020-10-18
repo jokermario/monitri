@@ -106,10 +106,10 @@ func (r resource) login(logger log.Logger) routing.Handler {
 
 			type data struct {
 				//TokenType    string `json:"token_type"`
-				Email          string `json:"email"`
-				AccessToken    string `json:"access_token"`
-				ExpiryTime     int64  `json:"expires"`
-				RefreshToken   string `json:"refresh_token"`
+				Email        string `json:"email"`
+				AccessToken  string `json:"access_token"`
+				ExpiryTime   int64  `json:"expires"`
+				RefreshToken string `json:"refresh_token"`
 			}
 			return c.Write(struct {
 				Status  string `json:"status"`
@@ -513,14 +513,20 @@ func (r resource) setup2FA(rc *routing.Context) error {
 	}{"success", "activated successfully"}, http.StatusOK)
 }
 
-func (r resource) checkAccountVerificationStatus (rc *routing.Context) error {
+func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	_, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetID())
-	if mssg != "" {
+	if mssg != nil {
+		type data struct {
+			Email   string `json:"email,omitempty"`
+			Phone   string `json:"phone,omitempty"`
+			Profile string `json:"profile,omitempty"`
+		}
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-		}{"failed", mssg}, http.StatusOK)
+			Details data   `json:"details"`
+		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

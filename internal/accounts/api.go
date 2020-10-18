@@ -33,7 +33,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	//r.Get("/account/<email>", res.getByEmail)
 	//r.Get("/user/all")
 	//r.Put("")
-//--------------------------------------------------ACCOUNT ENDPOINTS---------------------------------------------------
+	//--------------------------------------------------ACCOUNT ENDPOINTS---------------------------------------------------
 	r.Post("/account/profile/update", res.updateProfile)
 	r.Delete("/account/delete", res.deleteById)
 	r.Post("/account/logout", res.logout)
@@ -47,8 +47,9 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/auth/totp/initial/validate/<secret>/<passcode>", res.validateTOTPFirstTime)
 	r.Post("/account/auth/totp/validate/<passcode>", res.validateTOTP)
 	r.Post("/account/auth/setup2fa/<type>", res.setup2FA)
+	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
-//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
+	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 
 }
 
@@ -58,7 +59,7 @@ type resource struct {
 	redisConn redis.Conn
 }
 
-func (r resource) healthCheck( rc *routing.Context) error {
+func (r resource) healthCheck(rc *routing.Context) error {
 	return rc.WriteWithStatus("Live", http.StatusOK)
 }
 
@@ -88,11 +89,11 @@ func (r resource) login(logger log.Logger) routing.Handler {
 		if err != nil {
 			return errors.InternalServerError("")
 		}
-		if additionalSec != ""{
+		if additionalSec != "" {
 			return c.Write(struct {
 				AdditionalSecurity string `json:"additional_security,omitempty"`
 			}{additionalSec})
-		}else {
+		} else {
 			redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
 			if redisErr != nil {
 				return redisErr
@@ -105,15 +106,15 @@ func (r resource) login(logger log.Logger) routing.Handler {
 
 			type data struct {
 				//TokenType    string `json:"token_type"`
-				Email string `json:"email"`
-				AccessToken  string `json:"access_token"`
-				ExpiryTime   int64  `json:"expires"`
-				RefreshToken string `json:"refresh_token"`
+				Email          string `json:"email"`
+				AccessToken    string `json:"access_token"`
+				ExpiryTime     int64  `json:"expires"`
+				RefreshToken   string `json:"refresh_token"`
 			}
 			return c.Write(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-				Data data `json:"data,omitempty"`
+				Data    data   `json:"data,omitempty"`
 			}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 				hex.EncodeToString(encRefreshToken)}})
 		}
@@ -154,7 +155,7 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email string `json:"email"`
+			Email        string `json:"email"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -162,8 +163,8 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 		return c.Write(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-			Data data `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			Data    data   `json:"data,omitempty"`
+		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -203,7 +204,7 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email string `json:"email"`
+			Email        string `json:"email"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -211,8 +212,8 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 		return c.Write(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-			Data data `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			Data    data   `json:"data,omitempty"`
+		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -252,7 +253,7 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email string `json:"email"`
+			Email        string `json:"email"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -260,8 +261,8 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 		return c.Write(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-			Data data `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			Data    data   `json:"data,omitempty"`
+		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -385,7 +386,7 @@ func (r resource) refreshToken(rc *routing.Context) error {
 	return rc.Write(struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
-		Data data `json:"data,omitempty"`
+		Data    data   `json:"data,omitempty"`
 	}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
 		TokenDetails.RefreshToken}})
 }
@@ -418,7 +419,7 @@ func (r resource) verifyEmailToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err, ok := r.service.verifyEmailToken(rc.Request.Context(), identity.GetID(), rc.Param("token"), strings.ToLower(rc.Param("purpose")))
 	if !ok {
-		if err == errors.InternalServerError("emailTokenExpired"){
+		if err == errors.InternalServerError("emailTokenExpired") {
 			return errors.InternalServerError("email token expired")
 		}
 		return errors.InternalServerError("an error occurred while verifying the token")
@@ -430,7 +431,7 @@ func (r resource) verifyPhoneToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err, ok := r.service.verifyPhoneToken(rc.Request.Context(), identity.GetID(), rc.Param("token"), strings.ToLower(rc.Param("purpose")))
 	if !ok {
-		if err == errors.InternalServerError("phoneTokenExpired"){
+		if err == errors.InternalServerError("phoneTokenExpired") {
 			return errors.InternalServerError("phone token expired")
 		}
 		return errors.InternalServerError("an error occurred while verifying the token")
@@ -463,7 +464,7 @@ func (r resource) setupTOTP(rc *routing.Context) error {
 		return errors.InternalServerError("an error occurred while setting up the TOTP")
 	}
 	type data struct {
-		SecretKey       string `json:"secretKey"`
+		SecretKey string `json:"secretKey"`
 		ImageByte []byte `json:"imageByte"`
 	}
 	return rc.WriteWithStatus(struct {
@@ -510,6 +511,21 @@ func (r resource) setup2FA(rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}{"success", "activated successfully"}, http.StatusOK)
+}
+
+func (r resource) checkAccountVerificationStatus (rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	_, ok := r.service.completedVerification(rc.Request.Context(), identity.GetID())
+	if !ok {
+		return rc.WriteWithStatus(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		}{"failed", "verifications not completed"}, http.StatusOK)
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "completed"}, http.StatusOK)
 }
 
 //------------------------------------------------------TRANSACTION-----------------------------------------------------

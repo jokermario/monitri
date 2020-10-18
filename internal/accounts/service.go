@@ -62,6 +62,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
+	completedVerification(ctx context.Context, id string)(error, bool)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -91,8 +92,12 @@ type Account struct {
 	entity.Accounts
 }
 
-type Settings struct {
+type Setting struct {
 	entity.Settings
+}
+
+type Transaction struct {
+	entity.Transactions
 }
 
 type TokenDetails struct {
@@ -182,20 +187,22 @@ func (cpr ChangePasswordRequest) validate() error {
 		validation.Field(&cpr.Password, validation.Required, validation.Length(8, 0)))
 }
 
+//---------------------------------------------------ACCOUNT FUNCTIONS--------------------------------------------------
+
 func (s service) GetById(ctx context.Context, id string) (Account, error) {
-	account, err := s.repo.GetById(ctx, id)
+	account, err := s.repo.GetAccountById(ctx, id)
 	if err != nil {
 		return Account{}, err
 	}
 	return Account{account}, err
 }
 
-func (s service) GetSettingsById(ctx context.Context, id string) (Settings, error) {
+func (s service) GetSettingsById(ctx context.Context, id string) (Setting, error) {
 	settingsAccount, err := s.repo.GetSettingsById(ctx, id)
 	if err != nil {
-		return Settings{}, err
+		return Setting{}, err
 	}
-	return Settings{settingsAccount}, err
+	return Setting{settingsAccount}, err
 }
 
 func (s service) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -215,7 +222,7 @@ func (s service) GetAccountByPhone(ctx context.Context, phone string) (Account, 
 }
 
 func (s service) Count(ctx context.Context) (int, error) {
-	return s.repo.Count(ctx)
+	return s.repo.AccountCount(ctx)
 }
 
 func (s service) UpdateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error) {
@@ -233,7 +240,7 @@ func (s service) UpdateProfile(ctx context.Context, id string, req UpdateAccount
 	account.Address = strings.TrimSpace(req.Address)
 	account.UpdatedAt = time.Now()
 
-	if err := s.repo.Update(ctx, account.Accounts); err != nil {
+	if err := s.repo.AccountUpdate(ctx, account.Accounts); err != nil {
 		return Account{}, err
 	}
 	return account, nil
@@ -244,7 +251,7 @@ func (s service) DeleteById(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.repo.AccountDelete(ctx, id); err != nil {
 		return err
 	}
 	return nil
@@ -334,6 +341,19 @@ func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
+func (s service) completedVerification(ctx context.Context, id string)(error, bool) {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.GetById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
+		return err, false
+	}
+	if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
+		return nil, false
+	}
+	return nil, true
+}
+
 // authenticate authenticates a accounts using username and password.
 // If username and password are correct, an identity is returned. Otherwise, nil is returned.
 func (s service) authenticate(ctx context.Context, email, password string) Identity {
@@ -382,7 +402,7 @@ func (s service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress
 }
 
 func (s service) getAccountIdEmailPhone(ctx context.Context, id string) Identity {
-	accountInfo, err := s.repo.GetIdEmailPhone(ctx, id)
+	accountInfo, err := s.repo.GetAccountIdEmailPhone(ctx, id)
 	if err != nil {
 		return nil
 	}
@@ -403,7 +423,7 @@ func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) e
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 
 	// FIXME I knowingly didn't check for already existing email coz i'm relying on sql uniqueness in DB
-	err := s.repo.Create(ctx, entity.Accounts{
+	err := s.repo.AccountCreate(ctx, entity.Accounts{
 		Id:        strings.TrimSpace(id),
 		Email:     strings.TrimSpace(req.Email),
 		Phone:     strings.TrimSpace(req.Phone),
@@ -505,7 +525,7 @@ func (s service) ChangePassword(ctx context.Context, id, email string, req Chang
 	}
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	acc.Password = string(hashedPass)
-	updateErr := s.repo.Update(ctx, acc.Accounts)
+	updateErr := s.repo.AccountUpdate(ctx, acc.Accounts)
 	if updateErr != nil {
 		logger.Errorf("an error occurred while trying to update the password to the account row.\n"+
 			"The error: %s", updateErr)
@@ -608,7 +628,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, p
 		account.LoginEmailToken = int(RandomCrypto.Int64())
 		account.LoginEmailExpiry = time.Now().Add(time.Duration(5) * time.Minute).Unix()
 
-		updateErr := s.repo.Update(ctx, account.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
 				"The error: %s, updateErr")
@@ -638,7 +658,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, p
 		account.ConfirmEmailToken = int(RandomCrypto.Int64())
 		account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
 
-		updateErr := s.repo.Update(ctx, account.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
 				"The error: %s, updateErr")
@@ -658,7 +678,7 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
-		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s, err")
+		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s", err)
 		return err, false
 	}
 	if purpose == "login2fa" {
@@ -694,10 +714,10 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 		}
 
 		acc.ConfirmedEmail = 1
-		updateErr := s.repo.Update(ctx, acc.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, acc.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n" +
-				"The error: %s, err")
+				"The error: %s", updateErr)
 		}
 	}
 
@@ -717,7 +737,7 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 		account.LoginPhoneToken = int(RandomCrypto.Int64())
 		account.LoginPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
 		account.UpdatedAt = time.Now()
-		updateErr := s.repo.Update(ctx, account.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update the token to the account row.\n"+
 				"The error: %s", updateErr)
@@ -738,7 +758,7 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 		account.ConfirmPhoneToken = int(RandomCrypto.Int64())
 		account.ConfirmPhoneExpiry = time.Now().Add(time.Duration(10) * time.Minute).Unix()
 		account.UpdatedAt = time.Now()
-		updateErr := s.repo.Update(ctx, account.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update the token to the account row.\n"+
 				"The error: %s", updateErr)
@@ -763,7 +783,7 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.GetById(ctx, id)
 	if err != nil {
-		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s, err")
+		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
 		return err, false
 	}
 	if purpose == "login2fa" {
@@ -798,7 +818,7 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 		}
 
 		acc.ConfirmedPhone = 1
-		updateErr := s.repo.Update(ctx, acc.Accounts)
+		updateErr := s.repo.AccountUpdate(ctx, acc.Accounts)
 		if updateErr != nil {
 			logger.Errorf("an error occurred while trying to update confirmed phone status after veri.\n" +
 				"The error: %s, err")
@@ -1038,7 +1058,52 @@ func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
 	return plaintext, nil
 }
 
-//redis
+//-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
+
+func (s service) GetTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
+	transaction, err := s.repo.GetTransactionByTransRef(ctx, transRef)
+	if err != nil {
+		return Transaction{}, err
+	}
+	return Transaction{transaction}, err
+}
+
+func (s service) createTrans(ctx context.Context, id, transRef string) error {
+	logger := s.logger.With(ctx, "transaction", id)
+	err := s.repo.TransactionCreate(ctx, entity.Transactions{
+		AccountId: id,
+		TransactionId: transRef,
+		Status: "pending",
+	})
+	if err != nil {
+		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)
+		return err
+	}
+	return nil
+}
+
+func (s service) updateTrans(ctx context.Context, transRef, status, transType, currency string, amount, currentBalance int64) error {
+	logger := s.logger.With(ctx, "transaction", transRef)
+	trans, err := s.GetTransactionByTransRef(ctx, transRef)
+	if err != nil {
+		logger.Errorf("error occurred while trying to fetch a transaction with the ref %s", transRef)
+		return err
+	}
+	trans.Amount = amount
+	trans.Status = status
+	trans.TransactionType = transType
+	trans.Currency = currency
+	trans.CurrentBalance = currentBalance
+	updateErr := s.repo.TransactionUpdate(ctx, trans.Transactions)
+	if updateErr != nil {
+		logger.Errorf("error occurred while trying to update a transaction with transaction ref %s", transRef)
+		return err
+	}
+	return nil
+}
+
+//----------------------------------------------------REDIS FUNCTIONS---------------------------------------------------
+
 func (s service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0) //converting unix to UTC(to time object)
 	rt := time.Unix(td.RtExpires, 0)

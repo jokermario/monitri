@@ -6,11 +6,10 @@ import (
 	"github.com/qiangxue/go-env"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"os"
 )
 
 const (
-	//defaultServerPort         = 8080
+	defaultServerPort         = "8080"
 	defaultAccessExpirationHours = 1
 	defaultRefreshExpirationHours = 72
 )
@@ -23,6 +22,10 @@ type Config struct {
 	DSN string `yaml:"dsn" env:"DSN,secret"`
 	//AES Encryption Key
 	EncKey string `yaml:"enc_key" env:"ENC_KEY,secret"`
+	//Coinbase Key
+	CKEY string `yaml:"c_key" env:"C_KEY,secret"`
+	//Coinbase Secret
+	CSECRET string `yaml:"c_secret" env:"C_SECRET, secret"`
 	// JWT access token signing key. required.
 	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
 	// JWT refresh token signing key. required.
@@ -61,8 +64,8 @@ func Load(file string, logger log.Logger) (*Config, error) {
 	// default config
 
 	c := Config{
-		//ServerPort:    defaultServerPort,
-		ServerPort: os.Getenv("PORT"),
+		ServerPort:    defaultServerPort,
+		//ServerPort: os.Getenv("PORT"),
 		AccessTokenExpiration: defaultAccessExpirationHours,
 		RefreshTokenExpiration: defaultRefreshExpirationHours,
 	}

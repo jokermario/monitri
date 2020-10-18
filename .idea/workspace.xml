@@ -21,7 +21,16 @@
   <component name="ChangeListManager">
     <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmd/server/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/server/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/local.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config/local.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/middleware.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/repository.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/repository.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/throttleIP.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/throttleIP.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/config/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/transaction.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/transaction.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/wallet.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/wallet.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/migrations/db_tables.sql" beforeDir="false" afterPath="$PROJECT_DIR$/migrations/db_tables.sql" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -153,10 +162,10 @@
     <state x="552" y="198" key="#com.intellij.execution.impl.EditConfigurationsDialog/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1600367404343" />
     <state x="552" y="198" width="1092" height="755" key="#com.intellij.execution.impl.EditConfigurationsDialog/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600342897031" />
     <state x="552" y="198" key="#com.intellij.execution.impl.EditConfigurationsDialog/0.0.1920.1080@0.0.1920.1080" timestamp="1598595471367" />
-    <state x="-1280" y="275" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1601273557239">
+    <state x="-1280" y="275" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1602765687424">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1280" y="275" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601273557239" />
+    <state x="-1280" y="275" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1602765687424" />
     <state width="1877" height="289" key="GridCell.Tab.0.bottom" timestamp="1601576677631">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
@@ -251,19 +260,19 @@
       <screen x="-1080" y="0" width="1080" height="1920" />
     </state>
     <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599671155981" />
-    <state x="1303" y="0" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1601552247473">
+    <state x="1303" y="0" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1603043482026">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1088" maximized="true" key="dock-window-6/-1080.0.1080.1920/0.0.1920.1080/-3000.0.1920.1080@-3000.0.1920.1080" timestamp="1599681446239" />
-    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601552247473" />
-    <state x="1303" y="0" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1601549778529" />
+    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603043482026" />
+    <state x="1303" y="0" width="617" height="612" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1601830858276" />
     <state x="-26" y="-17" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1600175586989" />
     <state x="-1448" y="-19" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-3000.0.1920.1080" timestamp="1600447334737" />
     <state x="-1596" y="-10" width="1918" height="1078" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600672439152" />
-    <state x="-1550" y="231" width="583" height="849" key="find.popup" timestamp="1601404004435">
+    <state x="-1550" y="231" width="583" height="849" key="find.popup" timestamp="1602882698826">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1550" y="231" width="583" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601404004435" />
+    <state x="-1550" y="231" width="583" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1602882698825" />
     <state x="370" y="231" width="583" height="849" key="find.popup/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600679005176" />
     <state x="668" y="257" width="583" height="624" key="find.popup/0.0.1920.1080@0.0.1920.1080" timestamp="1599470533407" />
     <state x="785" y="299" key="refactoring.ChangeSignatureDialog" timestamp="1601189888987">

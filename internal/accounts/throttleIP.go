@@ -31,7 +31,7 @@ package accounts
 //	}
 //}
 //
-//// Create a custom visitorIPBehaviour struct which holds the ip request metadata for each user.
+//// creates a custom visitorIPBehaviour struct which holds the ip request metadata for each user.
 //type visitorIPBehaviour struct {
 //	ipAddress string
 //	requestCount int8
@@ -59,7 +59,7 @@ package accounts
 //		// Include the current time when creating a new visitor.
 //		visitorsIP[ip] = &visitorIPBehaviour{ip, count, time.Now()}
 //	}
-//	// Update the last seen time for the visitor.
+//	// Updates the last seen time for the visitor.
 //	fmt.Println(visitorsIP[ip])
 //	vi.requestCount = vi.requestCount + 1
 //	vi.lastSeen = time.Now()

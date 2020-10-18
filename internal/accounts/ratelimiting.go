@@ -26,7 +26,7 @@ func RateHandler() routing.Handler {
 	}
 }
 
-// Create a custom visitor struct which holds the rate limiter for each
+// creates a custom visitor struct which holds the rate limiter for each
 // visitor and the last time that the visitor was seen.
 type visitor struct {
 	limiter  *rate.Limiter
@@ -54,7 +54,7 @@ func getVisitor(ip string) *rate.Limiter {
 		visitors[ip] = &visitor{limiter, time.Now()}
 		return limiter
 	}
-	// Update the last seen time for the visitor.
+	// Updates the last seen time for the visitor.
 	v.lastSeen = time.Now()
 	return v.limiter
 }

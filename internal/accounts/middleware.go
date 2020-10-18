@@ -3,7 +3,6 @@ package accounts
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
@@ -78,7 +77,6 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 					message = err.Error()
 				}
 				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
-				fmt.Println(string(tokenInByte))
 				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(AccessTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
@@ -97,7 +95,6 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 					message = err.Error()
 				}
 				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
-				fmt.Println(string(tokenInByte))
 				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(RefreshTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
@@ -105,7 +102,6 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 				if err == nil {
 					return nil
 				}
-				fmt.Println(err.Error())
 				message = err.Error()
 			}
 		}

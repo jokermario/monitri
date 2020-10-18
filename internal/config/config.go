@@ -6,6 +6,7 @@ import (
 	"github.com/qiangxue/go-env"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"os"
 )
 
 const (
@@ -64,8 +65,8 @@ func Load(file string, logger log.Logger) (*Config, error) {
 	// default config
 
 	c := Config{
-		ServerPort:    defaultServerPort,
-		//ServerPort: os.Getenv("PORT"),
+		//ServerPort:    defaultServerPort,
+		ServerPort: os.Getenv("PORT"),
 		AccessTokenExpiration: defaultAccessExpirationHours,
 		RefreshTokenExpiration: defaultRefreshExpirationHours,
 	}

@@ -350,12 +350,18 @@ func (s service) completedVerification(ctx context.Context, id string)(error, []
 	}
 	if acc.ConfirmedEmail != 1 {
 		errstrings = append(errstrings, "email not verified")
+	}else{
+		errstrings = append(errstrings, "")
 	}
 	if acc.ConfirmedPhone != 1 {
 		errstrings = append(errstrings, "phone not verified")
+	}else{
+		errstrings = append(errstrings, "")
 	}
 	if acc.Dob == "" {
 		errstrings = append(errstrings, "profile not updated")
+	}else{
+		errstrings = append(errstrings, "")
 	}
 
 	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {

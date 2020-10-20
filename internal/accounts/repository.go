@@ -128,6 +128,16 @@ func (r repository) TransactionUpdate(ctx context.Context, transaction entity.Tr
 	return r.db.With(ctx).Model(&transaction).Update()
 }
 
+func (r repository) GetLatestTransaction(ctx context.Context, accountId string) (entity.Transactions, error) {
+	var transaction entity.Transactions
+	err := r.db.
+		With(ctx).
+		Select().
+		From("transactions").
+		Where(dbx.NewExp("account_id={:account_id}", dbx.Params{"account_id":accountId})).One(&transaction)
+	return transaction, err
+}
+
 //-------------------------------------------------------WALLETS--------------------------------------------------------
 
 func (r repository) WalletCreate(ctx context.Context, wallet entity.Wallets) error {

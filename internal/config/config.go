@@ -24,9 +24,13 @@ type Config struct {
 	//AES Encryption Key
 	EncKey string `yaml:"enc_key" env:"ENC_KEY,secret"`
 	//Coinbase Key
-	CKEY string `yaml:"c_key" env:"C_KEY,secret"`
+	CKey string `yaml:"c_key" env:"C_KEY,secret"`
 	//Coinbase Secret
-	CSECRET string `yaml:"c_secret" env:"C_SECRET, secret"`
+	CSecret string `yaml:"c_secret" env:"C_SECRET, secret"`
+	//Coinbase Key
+	PPub string `yaml:"p_pub" env:"P_PUB,secret"`
+	//Coinbase Secret
+	PSec string `yaml:"p_sec" env:"P_SEC, secret"`
 	// JWT access token signing key. required.
 	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
 	// JWT refresh token signing key. required.

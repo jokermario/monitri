@@ -50,7 +50,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
-
+	r.Post("transaction/initialize", res.initiatedTransaction)
 }
 
 type resource struct {
@@ -374,11 +374,20 @@ func (r resource) refreshToken(rc *routing.Context) error {
 	if refErr != nil {
 		return errors.InternalServerError("an error occurred while storing the refresh token")
 	}
-
+	//encrypt access and refresh token
+	encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+	if err != nil {
+		return errors.InternalServerError("")
+	}
+	encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+	if err != nil {
+		return errors.InternalServerError("")
+	}
 	//deletes the refresh token from redis
 	_ = r.service.logOut(rc.Request.Context(), r.redisConn, identity.GetRefreshID())
 	type data struct {
-		TokenType    string `json:"token_type"`
+		//TokenType    string `json:"token_type"`
+		Email        string `json:"email"`
 		AccessToken  string `json:"access_token"`
 		ExpiryTime   int64  `json:"expires"`
 		RefreshToken string `json:"refresh_token"`
@@ -387,8 +396,8 @@ func (r resource) refreshToken(rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 		Data    data   `json:"data,omitempty"`
-	}{"success", "tokens generated", data{"Bearer", TokenDetails.AccessToken, TokenDetails.AtExpires,
-		TokenDetails.RefreshToken}})
+	}{"success", "tokens generated", data{identity.GetEmail(), hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		hex.EncodeToString(encRefreshToken)}})
 }
 
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
@@ -526,7 +535,7 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Details data   `json:"details"`
-		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusOK)
+		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusBadRequest)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`
@@ -536,8 +545,44 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
-func (r resource) paystackWebhookForTransaction() error {
-	return nil
-}
+//func (r resource) paystackWebhookForTransaction(rc *routing.Context) error {
+//	if rc.Request.Method != http.MethodPost {
+//		return errors2.New("invalid HTTP Method")
+//	}
+//	signature := rc.Request.Header.Get("X-Paystack-Signature")
+//	if len(signature) > 0 {
+//		payload, err := ioutil.ReadAll(rc.Request.Body)
+//		if err != nil || len(payload) == 0 {
+//			return errors2.New("error passing payload")
+//		}
+//		if ok := r.service.webHookValid(string(payload), signature); !ok {
+//			return errors2.New("webhook is not valid")
+//		}
+//		var tmp map[string]interface{}
+//		_ = json.Unmarshal(payload, &tmp)
+//
+//		if tmp["event"] == "charge.success" {
+//			var payloadHold ChargeSuccessPayload
+//			_ = json.Unmarshal(payload, &payloadHold)
+//
+//			if payloadHold.Data.Status == "success" {
+//				err := r.service.updateTrans(rc.Request.Context(), payloadHold.Data.Reference, payloadHold.Data.Status, "credit", payloadHold.Data.Currency, payloadHold.Data.Amount)
+//			}
+//		}
+//	}
+//}
 
-//func (r resource)
+func (r resource) initiatedTransaction(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	if err := r.service.createTrans(rc.Request.Context(), identity.GetID(), rc.Param("referenceNo")); err != nil {
+		return rc.WriteWithStatus(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "transaction initialized"}, http.StatusOK)
+}

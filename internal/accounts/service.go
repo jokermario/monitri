@@ -5,8 +5,11 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha512"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -62,7 +65,10 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, id string)(error, []string, bool)
+	completedVerification(ctx context.Context, id string) (error, []string, bool)
+	createTrans(ctx context.Context, id, transRef string) error
+	updateTrans(ctx context.Context, transRef, status, transType, currency string, amount, currentBalance int64) error
+	webHookValid(payload, payStackSig string) bool
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -86,6 +92,7 @@ type service struct {
 	AccessTokenExpiration  int
 	RefreshTokenExpiration int
 	EncKey                 string
+	PSec                   string
 }
 
 type Account struct {
@@ -139,11 +146,93 @@ type UpdateAccountRequest struct {
 	Address    string `json:"address,omitempty"`
 }
 
+type Authorization struct {
+	AuthorizationCode string `json:"authorization_code,omitempty"`
+	Bin               string `json:"bin,omitempty"`
+	Last4             string `json:"last4,omitempty"`
+	ExpMonth          string `json:"exp_month,omitempty"`
+	ExpYear           string `json:"exp_year,omitempty"`
+	Channel           string `json:"channel,omitempty"`
+	CardType          string `json:"card_type,omitempty"`
+	Bank              string `json:"bank,omitempty"`
+	CountryCode       string `json:"country_code,omitempty"`
+	Brand             string `json:"brand,omitempty"`
+}
+
+type TransactionTimeline struct {
+	TimeSpent      int                      `json:"time_spent,omitempty"`
+	Attempts       int                      `json:"attempts,omitempty"`
+	Authentication string                   `json:"authentication,omitempty"` // TODO: confirm type
+	Errors         int                      `json:"errors,omitempty"`
+	Success        bool                     `json:"success,omitempty"`
+	Mobile         bool                     `json:"mobile,omitempty"`
+	Input          []string                 `json:"input,omitempty"` // TODO: confirm type
+	Channel        string                   `json:"channel,omitempty"`
+	History        []map[string]interface{} `json:"history,omitempty"`
+}
+
+type Customer struct {
+	ID           int                      `json:"id,omitempty"`
+	FirstName    string                   `json:"first_name,omitempty"`
+	LastName     string                   `json:"last_name,omitempty"`
+	Email        string                   `json:"email,omitempty"`
+	CustomerCode string                   `json:"customer_code,omitempty"`
+	Phone        string                   `json:"phone,omitempty"`
+	Metadata     []map[string]interface{} `json:"metadata,omitempty"`
+	RiskAction   string                   `json:"risk_action"`
+}
+
+type Plan struct {
+	ID                int     `json:"id,omitempty"`
+	CreatedAt         string  `json:"createdAt,omitempty"`
+	UpdatedAt         string  `json:"updatedAt,omitempty"`
+	Domain            string  `json:"domain,omitempty"`
+	Integration       int     `json:"integration,omitempty"`
+	Name              string  `json:"name,omitempty"`
+	Description       string  `json:"description,omitempty"`
+	PlanCode          string  `json:"plan_code,omitempty"`
+	Amount            float32 `json:"amount,omitempty"`
+	Interval          string  `json:"interval,omitempty"`
+	SendInvoices      bool    `json:"send_invoices,omitempty"`
+	SendSMS           bool    `json:"send_sms,omitempty"`
+	Currency          string  `json:"currency,omitempty"`
+	InvoiceLimit      float32 `json:"invoice_limit,omitempty"`
+	HostedPage        string  `json:"hosted_page,omitempty"`
+	HostedPageURL     string  `json:"hosted_page_url,omitempty"`
+	HostedPageSummary string  `json:"hosted_page_summary,omitempty"`
+}
+
+type DataInChargeSuccessPayload struct {
+	Id              int                    `json:"id,omitempty"`
+	Domain          string                 `json:"domain,omitempty"`
+	Status          string                 `json:"status,omitempty"`
+	Reference       string                 `json:"reference,omitempty"`
+	Amount          int                    `json:"amount,omitempty"`
+	Message         string                 `json:"message,omitempty"`
+	GatewayResponse string                 `json:"gateway_response,omitempty"`
+	PaidAt          string                 `json:"paid_at,omitempty"`
+	CreatedAt       string                 `json:"created_at,omitempty"`
+	Channel         string                 `json:"channel,omitempty"`
+	Currency        string                 `json:"currency,omitempty"`
+	IpAddress       string                 `json:"ip_address,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Log             TransactionTimeline    `json:"log,omitempty"`
+	Fees            string                 `json:"fees,omitempty"`
+	Customer        Customer               `json:"customer,omitempty"`
+	Authorization   Authorization          `json:"authorization,omitempty"`
+	Plan            Plan                   `json:"plan,omitempty"`
+}
+
+type ChargeSuccessPayload struct {
+	Event string                     `json:"event"`
+	Data  DataInChargeSuccessPayload `json:"data"`
+}
+
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey string) Service {
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey string, PSec string) Service {
 	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration, EncKey}
+		RefreshTokenExpiration, EncKey, PSec}
 }
 
 func (lr LoginRequest) validate() error {
@@ -185,6 +274,206 @@ func (uar UpdateAccountRequest) validate() error {
 func (cpr ChangePasswordRequest) validate() error {
 	return validation.ValidateStruct(&cpr,
 		validation.Field(&cpr.Password, validation.Required, validation.Length(8, 0)))
+}
+
+//-------------------------------------------------NON-SPECIFIC FUNCTIONS-----------------------------------------------
+
+// Login authenticates a accounts and generates a JWT token if authentication succeeds.
+// Otherwise, an error is returned.
+func (s service) Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
+	if err := req.validate(); err != nil {
+		return nil, err, ""
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+
+		settingsInfo, _ := s.repo.GetSettingsById(ctx, identity.GetID())
+
+		if settingsInfo.TwofaGoogleAuth == 1 {
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "mobile2FA"
+		} else if settingsInfo.TwofaEmail == 1 {
+			_ = s.generateAndSendEmailToken(ctx, req.Email, "login2fa")
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "email2FA"
+		} else if settingsInfo.TwofaPhone == 1 {
+			_ = s.generateAndSendPhoneToken(ctx, identity.GetPhone(), "login2fa")
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, "phone2FA"
+		} else {
+			TokenDetails, err := s.generateTokens(identity)
+			return TokenDetails, err, ""
+		}
+	}
+	return nil, errors.Unauthorized(""), ""
+}
+
+func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		if ok := totp.Validate(req.Token, identity.GetTOTPSecret()); !ok {
+			return nil, errors.Unauthorized("")
+		}
+		return s.generateTokens(identity)
+	}
+	return nil, errors.Unauthorized("")
+}
+
+func (s service) LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		_, ok := s.verifyEmailToken(ctx, identity.GetID(), req.Token, "login2fa")
+		if !ok {
+			return nil, errors.Unauthorized("")
+		}
+		return s.generateTokens(identity)
+	}
+	return nil, errors.Unauthorized("")
+}
+
+func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+		_, ok := s.verifyPhoneToken(ctx, identity.GetID(), req.Token, "login2fa")
+		if !ok {
+			return nil, errors.Unauthorized("")
+		}
+		return s.generateTokens(identity)
+	}
+	return nil, errors.Unauthorized("")
+}
+
+func (s service) completedVerification(ctx context.Context, id string) (error, []string, bool) {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.GetById(ctx, id)
+	var errstrings []string
+	if err != nil {
+		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
+	}
+	if acc.ConfirmedEmail != 1 {
+		errstrings = append(errstrings, "email not verified")
+	} else {
+		errstrings = append(errstrings, "")
+	}
+	if acc.ConfirmedPhone != 1 {
+		errstrings = append(errstrings, "phone not verified")
+	} else {
+		errstrings = append(errstrings, "")
+	}
+	if acc.Dob == "" {
+		errstrings = append(errstrings, "profile not updated")
+	} else {
+		errstrings = append(errstrings, "")
+	}
+
+	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
+	//	return nil, "email and phone has not been verified, and profile has not been updated", false
+	//}
+	return nil, errstrings, true
+}
+
+// authenticate authenticates a accounts using username and password.
+// If username and password are correct, an identity is returned. Otherwise, nil is returned.
+func (s service) authenticate(ctx context.Context, email, password string) Identity {
+	logger := s.logger.With(ctx, "accounts", email)
+
+	account, err := s.repo.GetAccountByEmail(ctx, email)
+	if err != nil {
+		logger.Errorf("an error occurred while trying to get the account with the email: %s\n "+
+			"The error is: %s", email, err)
+		return nil
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password)); err != nil {
+		switch err {
+		case bcrypt.ErrMismatchedHashAndPassword:
+			logger.Errorf("the password is does not exist")
+			return nil
+		default:
+			logger.Errorf("an error occurred while tyring to compare bcrypt password with input password")
+			return nil
+		}
+	}
+	logger.Infof("authentication successful. Email: %s", email)
+	return account
+}
+
+func (s service) aesEncrypt(data string) ([]byte, error) {
+	convertDataToByte := []byte(data)
+	keyToByte := []byte(s.EncKey)
+
+	//generate a new aes cipher using the key
+	c, err := aes.NewCipher(keyToByte)
+	if err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a cipher")
+		return nil, err
+	}
+
+	//using the galois counter mode (GCM) mode of operation its better than the CBC mode.
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	//create a new byte array the size of the GCM Nonce.
+	nonce := make([]byte, gcm.NonceSize())
+
+	//populate the nonce with cryptographically secure random sequence
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		s.logger.Errorf("an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, convertDataToByte, nil), nil
+}
+
+func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
+
+	encryptedTextToByte := []byte(encryptedText)
+
+	keyToByte := []byte(s.EncKey)
+
+	c, err := aes.NewCipher(keyToByte)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to generate a cipher")
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to generate a new GCM")
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(encryptedText) < nonceSize {
+		s.logger.Errorf("in decrypt: an error occurred while checking if encrypted data matched the nonce size")
+		return nil, err
+	}
+
+	nonce, ciphertext := encryptedTextToByte[:nonceSize], encryptedTextToByte[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		s.logger.Errorf("in decrypt: an error occurred while trying to decrypt the encrypted text")
+		return nil, err
+	}
+
+	return plaintext, nil
+}
+
+func (s service) webHookValid(payload, payStackSig string) bool {
+	hmac512 := hmac.New(sha512.New, []byte(s.PSec))
+	hmac512.Write([]byte(payload))
+	payloadSig := hex.EncodeToString(hmac512.Sum(nil))
+	if !hmac.Equal([]byte(payloadSig), []byte(payStackSig)) {
+		return false
+	}
+	return true
 }
 
 //---------------------------------------------------ACCOUNT FUNCTIONS--------------------------------------------------
@@ -269,130 +558,6 @@ func (s service) GetAccounts(ctx context.Context, offset, limit int) ([]Account,
 		result = append(result, Account{account})
 	}
 	return result, nil
-}
-
-// Login authenticates a accounts and generates a JWT token if authentication succeeds.
-// Otherwise, an error is returned.
-func (s service) Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
-	if err := req.validate(); err != nil {
-		return nil, err, ""
-	}
-	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-
-		settingsInfo, _ := s.repo.GetSettingsById(ctx, identity.GetID())
-
-		if settingsInfo.TwofaGoogleAuth == 1 {
-			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "mobile2FA"
-		} else if settingsInfo.TwofaEmail == 1 {
-			_ = s.generateAndSendEmailToken(ctx, req.Email, "login2fa")
-			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "email2FA"
-		} else if settingsInfo.TwofaPhone == 1 {
-			_ = s.generateAndSendPhoneToken(ctx, identity.GetPhone(), "login2fa")
-			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "phone2FA"
-		} else {
-			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, ""
-		}
-	}
-	return nil, errors.Unauthorized(""), ""
-}
-
-func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
-	if err := req.validate(); err != nil {
-		return nil, err
-	}
-	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-		if ok := totp.Validate(req.Token, identity.GetTOTPSecret()); !ok {
-			return nil, errors.Unauthorized("")
-		}
-		return s.generateTokens(identity)
-	}
-	return nil, errors.Unauthorized("")
-}
-
-func (s service) LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
-	if err := req.validate(); err != nil {
-		return nil, err
-	}
-	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-		_, ok := s.verifyEmailToken(ctx, identity.GetID(), req.Token, "login2fa")
-		if !ok {
-			return nil, errors.Unauthorized("")
-		}
-		return s.generateTokens(identity)
-	}
-	return nil, errors.Unauthorized("")
-}
-
-func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
-	if err := req.validate(); err != nil {
-		return nil, err
-	}
-	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-		_, ok := s.verifyPhoneToken(ctx, identity.GetID(), req.Token, "login2fa")
-		if !ok {
-			return nil, errors.Unauthorized("")
-		}
-		return s.generateTokens(identity)
-	}
-	return nil, errors.Unauthorized("")
-}
-
-func (s service) completedVerification(ctx context.Context, id string)(error, []string, bool) {
-	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
-	var errstrings []string
-	if err != nil {
-		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
-	}
-	if acc.ConfirmedEmail != 1 {
-		errstrings = append(errstrings, "email not verified")
-	}else{
-		errstrings = append(errstrings, "")
-	}
-	if acc.ConfirmedPhone != 1 {
-		errstrings = append(errstrings, "phone not verified")
-	}else{
-		errstrings = append(errstrings, "")
-	}
-	if acc.Dob == "" {
-		errstrings = append(errstrings, "profile not updated")
-	}else{
-		errstrings = append(errstrings, "")
-	}
-
-	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
-	//	return nil, "email and phone has not been verified, and profile has not been updated", false
-	//}
-	return nil, errstrings, true
-}
-
-// authenticate authenticates a accounts using username and password.
-// If username and password are correct, an identity is returned. Otherwise, nil is returned.
-func (s service) authenticate(ctx context.Context, email, password string) Identity {
-	logger := s.logger.With(ctx, "accounts", email)
-
-	account, err := s.repo.GetAccountByEmail(ctx, email)
-	if err != nil {
-		logger.Errorf("an error occurred while trying to get the account with the email: %s\n "+
-			"The error is: %s", email, err)
-		return nil
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password)); err != nil {
-		switch err {
-		case bcrypt.ErrMismatchedHashAndPassword:
-			logger.Errorf("the password is does not exist")
-			return nil
-		default:
-			logger.Errorf("an error occurred while tyring to compare bcrypt password with input password")
-			return nil
-		}
-	}
-	logger.Infof("authentication successful. Email: %s", email)
-	return account
 }
 
 func (s service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string) {
@@ -732,7 +897,7 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 		acc.ConfirmedEmail = 1
 		updateErr := s.repo.AccountUpdate(ctx, acc.Accounts)
 		if updateErr != nil {
-			logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n" +
+			logger.Errorf("an error occurred while trying to update confirmed email status after veri.\n"+
 				"The error: %s", updateErr)
 		}
 	}
@@ -1010,70 +1175,6 @@ func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool
 	return true
 }
 
-func (s service) aesEncrypt(data string) ([]byte, error) {
-	convertDataToByte := []byte(data)
-	keyToByte := []byte(s.EncKey)
-
-	//generate a new aes cipher using the key
-	c, err := aes.NewCipher(keyToByte)
-	if err != nil {
-		s.logger.Errorf("an error occurred while trying to generate a cipher")
-		return nil, err
-	}
-
-	//using the galois counter mode (GCM) mode of operation its better than the CBC mode.
-	gcm, err := cipher.NewGCM(c)
-	if err != nil {
-		s.logger.Errorf("an error occurred while trying to generate a new GCM")
-		return nil, err
-	}
-
-	//create a new byte array the size of the GCM Nonce.
-	nonce := make([]byte, gcm.NonceSize())
-
-	//populate the nonce with cryptographically secure random sequence
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		s.logger.Errorf("an error occurred while trying to generate a new GCM")
-		return nil, err
-	}
-
-	return gcm.Seal(nonce, nonce, convertDataToByte, nil), nil
-}
-
-func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
-
-	encryptedTextToByte := []byte(encryptedText)
-
-	keyToByte := []byte(s.EncKey)
-
-	c, err := aes.NewCipher(keyToByte)
-	if err != nil {
-		s.logger.Errorf("in decrypt: an error occurred while trying to generate a cipher")
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(c)
-	if err != nil {
-		s.logger.Errorf("in decrypt: an error occurred while trying to generate a new GCM")
-		return nil, err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(encryptedText) < nonceSize {
-		s.logger.Errorf("in decrypt: an error occurred while checking if encrypted data matched the nonce size")
-		return nil, err
-	}
-
-	nonce, ciphertext := encryptedTextToByte[:nonceSize], encryptedTextToByte[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		s.logger.Errorf("in decrypt: an error occurred while trying to decrypt the encrypted text")
-		return nil, err
-	}
-
-	return plaintext, nil
-}
-
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 
 func (s service) GetTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
@@ -1087,9 +1188,9 @@ func (s service) GetTransactionByTransRef(ctx context.Context, transRef string) 
 func (s service) createTrans(ctx context.Context, id, transRef string) error {
 	logger := s.logger.With(ctx, "transaction", id)
 	err := s.repo.TransactionCreate(ctx, entity.Transactions{
-		AccountId: id,
+		AccountId:     id,
 		TransactionId: transRef,
-		Status: "pending",
+		Status:        "pending",
 	})
 	if err != nil {
 		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)

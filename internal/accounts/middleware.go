@@ -124,7 +124,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 		if val == "" {
 			return errors.Unauthorized("Token is not authorized")
 		}
-		acc, _ := service2.GetById(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
+		acc, _ := service2.getAccountById(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
 		ctx := WithUser(
 			c.Request.Context(), token.Claims.(jwt.MapClaims)["accessUUID"].(string),
 			"",

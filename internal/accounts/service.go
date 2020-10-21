@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
@@ -27,6 +28,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,16 +38,16 @@ import (
 )
 
 type Service interface {
-	GetById(ctx context.Context, id string) (Account, error)
-	GetAccountByEmail(ctx context.Context, email string) (Account, error)
-	GetAccountByPhone(ctx context.Context, phone string) (Account, error)
-	Count(ctx context.Context) (int, error)
-	UpdateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error)
-	DeleteById(ctx context.Context, id string) error
-	GetAccounts(ctx context.Context, offset, limit int) ([]Account, error)
-	Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string)
-	CreateAccount(ctx context.Context, req CreateAccountsRequest) error
-	ChangePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
+	getAccountById(ctx context.Context, id string) (Account, error)
+	getAccountByEmail(ctx context.Context, email string) (Account, error)
+	getAccountByPhone(ctx context.Context, phone string) (Account, error)
+	count(ctx context.Context) (int, error)
+	updateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error)
+	deleteById(ctx context.Context, id string) error
+	getAccounts(ctx context.Context, offset, limit int) ([]Account, error)
+	login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string)
+	createAccount(ctx context.Context, req CreateAccountsRequest) error
+	changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
 	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
 	checkIfKeyExist(conn redis.Conn, key string) (string, error)
 	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
@@ -60,15 +63,18 @@ type Service interface {
 	validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool
 	validateTOTP(ctx context.Context, passcode, secret string) bool
 	LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
-	LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
-	LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
 	completedVerification(ctx context.Context, id string) (error, []string, bool)
+	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
+	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createTrans(ctx context.Context, id, transRef string) error
-	updateTrans(ctx context.Context, transRef, status, transType, currency string, amount, currentBalance int64) error
+	updateTrans(ctx context.Context, id, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error
 	webHookValid(payload, payStackSig string) bool
+	verifyOnPaystack(transRef string) bool
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -93,6 +99,7 @@ type service struct {
 	RefreshTokenExpiration int
 	EncKey                 string
 	PSec                   string
+	PaystackVerifyUrl      string
 }
 
 type Account struct {
@@ -157,6 +164,8 @@ type Authorization struct {
 	Bank              string `json:"bank,omitempty"`
 	CountryCode       string `json:"country_code,omitempty"`
 	Brand             string `json:"brand,omitempty"`
+	Signature         string `json:"signature,omitempty"`
+	Reusable          bool   `json:"reusable,omitempty"`
 }
 
 type TransactionTimeline struct {
@@ -223,16 +232,42 @@ type DataInChargeSuccessPayload struct {
 	Plan            Plan                   `json:"plan,omitempty"`
 }
 
+type DataInVerifyPaymentResponsePayload struct {
+	Amount          int                    `json:"amount,omitempty"`
+	Currency        string                 `json:"currency,omitempty"`
+	TransactionDate string                 `json:"transaction_date,omitempty"`
+	Status          string                 `json:"status,omitempty"`
+	Reference       string                 `json:"reference,omitempty"`
+	Domain          string                 `json:"domain,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	GatewayResponse string                 `json:"gateway_response,omitempty"`
+	Message         interface{}            `json:"message,omitempty"`
+	Channel         string                 `json:"channel,omitempty"`
+	IpAddress       string                 `json:"ip_address,omitempty"`
+	Log             TransactionTimeline    `json:"log,omitempty"`
+	Fees            string                 `json:"fees,omitempty"`
+	Authorization   Authorization          `json:"authorization,omitempty"`
+	Customer        Customer               `json:"customer,omitempty"`
+	Plan            string                 `json:"plan,omitempty"`
+	RequestedAmount int                    `json:"requested_amount,omitempty"`
+}
+
 type ChargeSuccessPayload struct {
 	Event string                     `json:"event"`
 	Data  DataInChargeSuccessPayload `json:"data"`
 }
 
+type VerifyPaymentResponsePayload struct {
+	Status  bool	`json:"status,omitempty"`
+	Message string	`json:"message,omitempty"`
+	Data	DataInVerifyPaymentResponsePayload	`json:"data,omitempty"`
+}
+
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey string, PSec string) Service {
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackVerifyUrl string) Service {
 	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration, EncKey, PSec}
+		RefreshTokenExpiration, EncKey, PSec, PaystackVerifyUrl}
 }
 
 func (lr LoginRequest) validate() error {
@@ -280,7 +315,7 @@ func (cpr ChangePasswordRequest) validate() error {
 
 // Login authenticates a accounts and generates a JWT token if authentication succeeds.
 // Otherwise, an error is returned.
-func (s service) Login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
+func (s service) login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
 	if err := req.validate(); err != nil {
 		return nil, err, ""
 	}
@@ -320,7 +355,7 @@ func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginR
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+func (s service) loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
@@ -334,7 +369,7 @@ func (s service) LoginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+func (s service) loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
@@ -350,7 +385,7 @@ func (s service) LoginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 
 func (s service) completedVerification(ctx context.Context, id string) (error, []string, bool) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	var errstrings []string
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
@@ -478,7 +513,7 @@ func (s service) webHookValid(payload, payStackSig string) bool {
 
 //---------------------------------------------------ACCOUNT FUNCTIONS--------------------------------------------------
 
-func (s service) GetById(ctx context.Context, id string) (Account, error) {
+func (s service) getAccountById(ctx context.Context, id string) (Account, error) {
 	account, err := s.repo.GetAccountById(ctx, id)
 	if err != nil {
 		return Account{}, err
@@ -486,7 +521,7 @@ func (s service) GetById(ctx context.Context, id string) (Account, error) {
 	return Account{account}, err
 }
 
-func (s service) GetSettingsById(ctx context.Context, id string) (Setting, error) {
+func (s service) getSettingsById(ctx context.Context, id string) (Setting, error) {
 	settingsAccount, err := s.repo.GetSettingsById(ctx, id)
 	if err != nil {
 		return Setting{}, err
@@ -494,7 +529,7 @@ func (s service) GetSettingsById(ctx context.Context, id string) (Setting, error
 	return Setting{settingsAccount}, err
 }
 
-func (s service) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
+func (s service) getAccountByEmail(ctx context.Context, email string) (Account, error) {
 	account, err := s.repo.GetAccountByEmail(ctx, email)
 	if err != nil {
 		return Account{}, err
@@ -502,7 +537,7 @@ func (s service) GetAccountByEmail(ctx context.Context, email string) (Account, 
 	return Account{account}, err
 }
 
-func (s service) GetAccountByPhone(ctx context.Context, phone string) (Account, error) {
+func (s service) getAccountByPhone(ctx context.Context, phone string) (Account, error) {
 	account, err := s.repo.GetAccountByPhone(ctx, phone)
 	if err != nil {
 		return Account{}, err
@@ -510,15 +545,15 @@ func (s service) GetAccountByPhone(ctx context.Context, phone string) (Account, 
 	return Account{account}, err
 }
 
-func (s service) Count(ctx context.Context) (int, error) {
+func (s service) count(ctx context.Context) (int, error) {
 	return s.repo.AccountCount(ctx)
 }
 
-func (s service) UpdateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error) {
+func (s service) updateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error) {
 	if err := req.validate(); err != nil {
 		return Account{}, err
 	}
-	account, err := s.GetById(ctx, id)
+	account, err := s.getAccountById(ctx, id)
 	if err != nil {
 		return Account{}, err
 	}
@@ -535,8 +570,8 @@ func (s service) UpdateProfile(ctx context.Context, id string, req UpdateAccount
 	return account, nil
 }
 
-func (s service) DeleteById(ctx context.Context, id string) error {
-	_, err := s.GetById(ctx, id)
+func (s service) deleteById(ctx context.Context, id string) error {
+	_, err := s.getAccountById(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -548,7 +583,7 @@ func (s service) DeleteById(ctx context.Context, id string) error {
 
 //func (s service) GenerateEmailVerificationToken(ctx context.Context, )
 
-func (s service) GetAccounts(ctx context.Context, offset, limit int) ([]Account, error) {
+func (s service) getAccounts(ctx context.Context, offset, limit int) ([]Account, error) {
 	accounts, err := s.repo.GetAccounts(ctx, offset, limit)
 	if err != nil {
 		return nil, err
@@ -590,7 +625,7 @@ func (s service) getAccountIdEmailPhone(ctx context.Context, id string) Identity
 	return entity.Accounts{Id: accountInfo.Id, Email: accountInfo.Email, Phone: accountInfo.Phone}
 }
 
-func (s service) CreateAccount(ctx context.Context, req CreateAccountsRequest) error {
+func (s service) createAccount(ctx context.Context, req CreateAccountsRequest) error {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
 		return err
@@ -686,7 +721,7 @@ func (s service) verifyPassword(password string) error {
 	return nil
 }
 
-func (s service) ChangePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
+func (s service) changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	if strErr := req.validate(); strErr != nil {
 		logger.Errorf("validation failed.\n"+
@@ -698,7 +733,7 @@ func (s service) ChangePassword(ctx context.Context, id, email string, req Chang
 			"The error: %s", err)
 		return err, false
 	}
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to fetch the account.\n"+
 			"The error: %s", err)
@@ -801,7 +836,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, p
 		}{
 			Token: RandomCrypto,
 		})
-		account, err := s.GetAccountByEmail(ctx, receiverEmail)
+		account, err := s.getAccountByEmail(ctx, receiverEmail)
 		if err != nil {
 			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
 			return err
@@ -831,7 +866,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, p
 		}{
 			Token: RandomCrypto,
 		})
-		account, err := s.GetAccountByEmail(ctx, receiverEmail)
+		account, err := s.getAccountByEmail(ctx, receiverEmail)
 		if err != nil {
 			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
 			return err
@@ -857,7 +892,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, p
 
 func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s", err)
 		return err, false
@@ -908,7 +943,7 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error {
 	logger := s.logger.With(ctx, "account", receiverPhone)
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
-	account, err := s.GetAccountByPhone(ctx, receiverPhone)
+	account, err := s.getAccountByPhone(ctx, receiverPhone)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get account by phone.\nThe error: %s", err)
 		return err
@@ -962,7 +997,7 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 
 func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
 		return err, false
@@ -1011,7 +1046,7 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 
 func (s service) set2FA(ctx context.Context, id, email, phone, Type string) error {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
 		return err
@@ -1022,7 +1057,7 @@ func (s service) set2FA(ctx context.Context, id, email, phone, Type string) erro
 			return err
 		}
 
-		setAcct, err := s.GetSettingsById(ctx, id)
+		setAcct, err := s.getSettingsById(ctx, id)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				if err := s.repo.CreateSettings(ctx, entity.Settings{
@@ -1062,7 +1097,7 @@ func (s service) set2FA(ctx context.Context, id, email, phone, Type string) erro
 			return errors.InternalServerError("emailFaulty")
 		}
 
-		setAcct, err := s.GetSettingsById(ctx, id)
+		setAcct, err := s.getSettingsById(ctx, id)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				if err := s.repo.CreateSettings(ctx, entity.Settings{
@@ -1119,7 +1154,7 @@ func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, e
 
 func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.GetById(ctx, id)
+	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to fetch user acc. The error: %s", err)
 	}
@@ -1130,7 +1165,7 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	}
 	acc.TotpSecret = secret
 	acc.UpdatedAt = time.Now()
-	setAcct, err := s.GetSettingsById(ctx, id)
+	setAcct, err := s.getSettingsById(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, entity.Settings{
@@ -1177,13 +1212,25 @@ func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 
-func (s service) GetTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
+func (s service) getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
 	transaction, err := s.repo.GetTransactionByTransRef(ctx, transRef)
 	if err != nil {
 		return Transaction{}, err
 	}
 	return Transaction{transaction}, err
 }
+
+//func (s service) getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error) {
+//	logger := s.logger.With(ctx, "account", accountId)
+//	trans, err := s.repo.GetLatestTransaction(ctx, accountId)
+//	if err != nil {
+//		if err == sql.ErrNoRows {
+//			return Transaction{}, err
+//		}
+//		logger.Errorf("an error occurred while trying to get latest transaction\nThe error: %s", err)
+//	}
+//	return Transaction{trans}, nil
+//}
 
 func (s service) createTrans(ctx context.Context, id, transRef string) error {
 	logger := s.logger.With(ctx, "transaction", id)
@@ -1199,9 +1246,9 @@ func (s service) createTrans(ctx context.Context, id, transRef string) error {
 	return nil
 }
 
-func (s service) updateTrans(ctx context.Context, transRef, status, transType, currency string, amount, currentBalance int64) error {
+func (s service) updateTrans(ctx context.Context, acctId, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error {
 	logger := s.logger.With(ctx, "transaction", transRef)
-	trans, err := s.GetTransactionByTransRef(ctx, transRef)
+	trans, err := s.getTransactionByTransRef(ctx, transRef)
 	if err != nil {
 		logger.Errorf("error occurred while trying to fetch a transaction with the ref %s", transRef)
 		return err
@@ -1210,13 +1257,45 @@ func (s service) updateTrans(ctx context.Context, transRef, status, transType, c
 	trans.Status = status
 	trans.TransactionType = transType
 	trans.Currency = currency
-	trans.CurrentBalance = currentBalance
-	updateErr := s.repo.TransactionUpdate(ctx, trans.Transactions)
+	trans.PaystackPayload = requestPayload
+
+	acct, err := s.getAccountById(ctx, acctId)
+	if err != nil {
+		logger.Errorf("error occurred while trying to fetch the account that has the transaction with the ref %s", transRef)
+		return err
+	}
+	acct.CurrentBalance = currentBalance
+	updateErr := s.repo.updateAccountAndTransactionTableTrans(ctx, acct.Accounts, trans.Transactions)
 	if updateErr != nil {
 		logger.Errorf("error occurred while trying to update a transaction with transaction ref %s", transRef)
 		return err
 	}
 	return nil
+}
+
+func (s service) verifyOnPaystack(transRef string) bool {
+	u, _ := url.ParseRequestURI(s.PaystackVerifyUrl)
+	urlToString := u.String()
+
+	req, _ := http.NewRequest(http.MethodGet, urlToString+"/"+transRef, nil)
+	req.Header.Add("Authorization", "Bearer "+s.PSec)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.logger.Errorf("Error:", err)
+	}
+
+	if resp.StatusCode == 200 {
+		// read response body
+		dataa, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		var responsePayload *VerifyPaymentResponsePayload
+		_ = json.Unmarshal(dataa, &responsePayload)
+		if responsePayload.Data.Status == "success" {
+			return true
+		}
+	}
+	return false
 }
 
 //----------------------------------------------------REDIS FUNCTIONS---------------------------------------------------

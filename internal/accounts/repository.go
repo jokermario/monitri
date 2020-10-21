@@ -31,6 +31,8 @@ type Repository interface {
 	WalletCreate(ctx context.Context, wallet entity.Wallets) error
 	GetTransactionByTransRef(ctx context.Context, transRef string) (entity.Transactions, error)
 	TransactionUpdate(ctx context.Context, transaction entity.Transactions) error
+	//GetLatestTransaction(ctx context.Context, accountId string) (entity.Transactions, error)
+	updateAccountAndTransactionTableTrans(ctx context.Context, accounts entity.Accounts, transactions entity.Transactions) error
 }
 
 type repository struct {
@@ -128,15 +130,17 @@ func (r repository) TransactionUpdate(ctx context.Context, transaction entity.Tr
 	return r.db.With(ctx).Model(&transaction).Update()
 }
 
-func (r repository) GetLatestTransaction(ctx context.Context, accountId string) (entity.Transactions, error) {
-	var transaction entity.Transactions
-	err := r.db.
-		With(ctx).
-		Select().
-		From("transactions").
-		Where(dbx.NewExp("account_id={:account_id}", dbx.Params{"account_id":accountId})).One(&transaction)
-	return transaction, err
-}
+//func (r repository) GetLatestTransaction(ctx context.Context, accountId string) (entity.Transactions, error) {
+//	var transaction entity.Transactions
+//	err := r.db.
+//		With(ctx).
+//		Select().
+//		From("transactions").
+//		OrderBy("created_at DESC").
+//		Where(dbx.NewExp("account_id={:account_id}", dbx.Params{"account_id":accountId})).
+//		AndWhere(dbx.NewExp("current_balance>{:zero_val}", dbx.Params{"zero_val":0})).One(&transaction)
+//	return transaction, err
+//}
 
 //-------------------------------------------------------WALLETS--------------------------------------------------------
 
@@ -199,6 +203,20 @@ func (r repository) updateAccountAndSettingsTableTrans(ctx context.Context, acco
 	}); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (r repository) updateAccountAndTransactionTableTrans(ctx context.Context, accounts entity.Accounts,
+	transactions entity.Transactions) error {
+	if err := r.db.Transactional(ctx, func(ctx context.Context) error {
+		if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
+			return accUpdateErr
+		}
+		if transUpdateErr := r.db.With(ctx).Model(&transactions).Update(); transUpdateErr != nil {
+			return transUpdateErr
+		}
+		return nil
+	}); err != nil {return err}
 	return nil
 }
 

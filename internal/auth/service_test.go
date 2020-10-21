@@ -12,9 +12,9 @@ package auth
 //func Test_service_Authenticate(t *testing.T) {
 //	logger, _ := log.NewForTest()
 //	s := NewService("test", 100, logger)
-//	_, err := s.Login(context.Background(), "unknown", "bad")
+//	_, err := s.login(context.Background(), "unknown", "bad")
 //	assert.Equal(t, errors.Unauthorized(""), err)
-//	token, err := s.Login(context.Background(), "demo", "pass")
+//	token, err := s.login(context.Background(), "demo", "pass")
 //	assert.Nil(t, err)
 //	assert.NotEmpty(t, token)
 //}

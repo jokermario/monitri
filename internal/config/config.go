@@ -27,10 +27,12 @@ type Config struct {
 	CKey string `yaml:"c_key" env:"C_KEY,secret"`
 	//Coinbase Secret
 	CSecret string `yaml:"c_secret" env:"C_SECRET, secret"`
-	//Coinbase Key
+	//paystack public key
 	PPub string `yaml:"p_pub" env:"P_PUB,secret"`
-	//Coinbase Secret
+	//paystack seceret key
 	PSec string `yaml:"p_sec" env:"P_SEC, secret"`
+	//paystack verify payment url
+	PaystackVerifyPaymentURL string `yaml:"paystack_verify_url" env:"PAYSTACK_VERIFY_URL"`
 	// JWT access token signing key. required.
 	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
 	// JWT refresh token signing key. required.

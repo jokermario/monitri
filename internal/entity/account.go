@@ -20,6 +20,7 @@ type Accounts struct {
 	Phone              string    `json:"phone,omitempty"`
 	Bankname           string    `json:"bankname,omitempty"`
 	BankAccountNo      string    `json:"bank_account_no,omitempty"`
+	CurrentBalance     int       `json:"current_balance"`
 	ConfirmedEmail     int       `json:"confirmed_email,omitempty"`
 	ConfirmEmailToken  int       `json:"confirm_email_token,omitempty"`
 	ConfirmEmailExpiry int64     `json:"confirm_email_expiry,omitempty"`

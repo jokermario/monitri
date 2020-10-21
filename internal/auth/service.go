@@ -19,8 +19,8 @@ package auth
 //type Service interface {
 //	// authenticate authenticates a accounts using username and password.
 //	// It returns a JWT token if authentication succeeds. Otherwise, an error is returned.
-//	Login(ctx context.Context, req LoginRequest) (string, error)
-//	CreateAccount(ctx context.Context, req CreateAccountsRequest) (string, error)
+//	login(ctx context.Context, req LoginRequest) (string, error)
+//	createAccount(ctx context.Context, req CreateAccountsRequest) (string, error)
 //}
 //
 //

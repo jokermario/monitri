@@ -2,11 +2,14 @@ package accounts
 
 import (
 	"encoding/hex"
+	"encoding/json"
+	errors2 "errors"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
 	"github.com/jokermario/monitri/pkg/log"
 	"github.com/jokermario/monitri/pkg/pagination"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -26,10 +29,11 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
 	r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
 	r.Post("/new/account", res.createAccount(logger))
+	r.Post("transaction/webhook", res.paystackWebhookForTransaction)
 
 	r.Use(authHandler)
 
-	//r.Get("/account/<id>", res.getById)
+	//r.Get("/account/<id>", res.getAccountById)
 	//r.Get("/account/<email>", res.getByEmail)
 	//r.Get("/user/all")
 	//r.Put("")
@@ -49,8 +53,8 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/auth/setup2fa/<type>", res.setup2FA)
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
-	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
-	r.Post("transaction/initialize", res.initiatedTransaction)
+//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
+	r.Post("transaction/initialize/<referenceNo>", res.initiatedTransaction)
 }
 
 type resource struct {
@@ -75,7 +79,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			logger.Errorf("invalid request: %v", err)
 			return errors.BadRequest("")
 		}
-		TokenDetails, loginErr, additionalSec := r.service.Login(c.Request.Context(), req)
+		TokenDetails, loginErr, additionalSec := r.service.login(c.Request.Context(), req)
 		if loginErr != nil {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
@@ -178,7 +182,7 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			logger.Errorf("invalid request: %v", err)
 			return errors.BadRequest("")
 		}
-		TokenDetails, loginErr := r.service.LoginWithEmail2FA(c.Request.Context(), req)
+		TokenDetails, loginErr := r.service.loginWithEmail2FA(c.Request.Context(), req)
 		if loginErr != nil {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
@@ -227,7 +231,7 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 			logger.Errorf("invalid request: %v", err)
 			return errors.BadRequest("")
 		}
-		TokenDetails, loginErr := r.service.LoginWithPhone2FA(c.Request.Context(), req)
+		TokenDetails, loginErr := r.service.loginWithPhone2FA(c.Request.Context(), req)
 		if loginErr != nil {
 			logger.Errorf("invalid request: %v", loginErr)
 			return loginErr
@@ -275,7 +279,7 @@ func (r resource) createAccount(logger log.Logger) routing.Handler {
 			return errors.BadRequest("")
 		}
 
-		err := r.service.CreateAccount(context.Request.Context(), input)
+		err := r.service.createAccount(context.Request.Context(), input)
 		if err != nil {
 			logger.With(context.Request.Context()).Errorf("problems occurred while creating an account: %v", err)
 			return context.WriteWithStatus(errors.InternalServerError("problems occurred while creating an account"),
@@ -289,7 +293,7 @@ func (r resource) createAccount(logger log.Logger) routing.Handler {
 }
 
 func (r resource) getById(rc *routing.Context) error {
-	account, err := r.service.GetById(rc.Request.Context(), rc.Param("id"))
+	account, err := r.service.getAccountById(rc.Request.Context(), rc.Param("id"))
 	if err != nil {
 		return err
 	}
@@ -297,7 +301,7 @@ func (r resource) getById(rc *routing.Context) error {
 }
 
 func (r resource) getByEmail(rc *routing.Context) error {
-	account, err := r.service.GetAccountByEmail(rc.Request.Context(), rc.Param("email"))
+	account, err := r.service.getAccountByEmail(rc.Request.Context(), rc.Param("email"))
 	if err != nil {
 		return err
 	}
@@ -312,7 +316,7 @@ func (r resource) updateProfile(rc *routing.Context) error {
 	}
 
 	identity := CurrentAccount(rc.Request.Context())
-	account, err := r.service.UpdateProfile(rc.Request.Context(), identity.GetID(), input)
+	account, err := r.service.updateProfile(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
 		r.logger.With(rc.Request.Context()).Error(err)
 		return err
@@ -323,13 +327,13 @@ func (r resource) updateProfile(rc *routing.Context) error {
 
 func (r resource) getAccounts(rc *routing.Context) error {
 	ctx := rc.Request.Context()
-	count, err := r.service.Count(ctx)
+	count, err := r.service.count(ctx)
 	if err != nil {
 		r.logger.With(ctx).Error(err)
 		return err
 	}
 	pages := pagination.NewFromRequest(rc.Request, count)
-	account, err := r.service.GetAccounts(ctx, pages.Offset(), pages.Limit())
+	account, err := r.service.getAccounts(ctx, pages.Offset(), pages.Limit())
 	if err != nil {
 		r.logger.With(ctx).Error(err)
 		return err
@@ -340,7 +344,7 @@ func (r resource) getAccounts(rc *routing.Context) error {
 
 func (r resource) deleteById(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	if err := r.service.DeleteById(rc.Request.Context(), identity.GetID()); err != nil {
+	if err := r.service.deleteById(rc.Request.Context(), identity.GetID()); err != nil {
 		r.logger.With(rc.Request.Context()).Error(err)
 		return err
 	}
@@ -456,7 +460,7 @@ func (r resource) changePassword(rc *routing.Context) error {
 	}
 
 	identity := CurrentAccount(rc.Request.Context())
-	_, ok := r.service.ChangePassword(rc.Request.Context(), identity.GetID(), identity.GetEmail(), input)
+	_, ok := r.service.changePassword(rc.Request.Context(), identity.GetID(), identity.GetEmail(), input)
 	if !ok {
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}
@@ -545,32 +549,63 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
-//func (r resource) paystackWebhookForTransaction(rc *routing.Context) error {
-//	if rc.Request.Method != http.MethodPost {
-//		return errors2.New("invalid HTTP Method")
-//	}
-//	signature := rc.Request.Header.Get("X-Paystack-Signature")
-//	if len(signature) > 0 {
-//		payload, err := ioutil.ReadAll(rc.Request.Body)
-//		if err != nil || len(payload) == 0 {
-//			return errors2.New("error passing payload")
-//		}
-//		if ok := r.service.webHookValid(string(payload), signature); !ok {
-//			return errors2.New("webhook is not valid")
-//		}
-//		var tmp map[string]interface{}
-//		_ = json.Unmarshal(payload, &tmp)
-//
-//		if tmp["event"] == "charge.success" {
-//			var payloadHold ChargeSuccessPayload
-//			_ = json.Unmarshal(payload, &payloadHold)
-//
-//			if payloadHold.Data.Status == "success" {
-//				err := r.service.updateTrans(rc.Request.Context(), payloadHold.Data.Reference, payloadHold.Data.Status, "credit", payloadHold.Data.Currency, payloadHold.Data.Amount)
-//			}
-//		}
-//	}
-//}
+func (r resource) paystackWebhookForTransaction(rc *routing.Context) error {
+	if rc.Request.Method != http.MethodPost {
+		return errors2.New("invalid HTTP Method")
+	}
+	signature := rc.Request.Header.Get("X-Paystack-Signature")
+	if len(signature) > 0 {
+		payload, err := ioutil.ReadAll(rc.Request.Body)
+		if err != nil || len(payload) == 0 {
+			return errors2.New("error passing payload")
+		}
+		if ok := r.service.webHookValid(string(payload), signature); !ok {
+			return errors2.New("webhook is not valid")
+		}
+		var tmp map[string]interface{}
+		_ = json.Unmarshal(payload, &tmp)
+
+		if tmp["event"] == "charge.success" {
+			var payloadHold ChargeSuccessPayload
+			_ = json.Unmarshal(payload, &payloadHold)
+			payloadAsString, _ := json.Marshal(payloadHold)
+
+			//verify payment on paystack
+			if ok := r.service.verifyOnPaystack(payloadHold.Data.Reference); !ok {
+				return errors2.New("payment failed verification")
+			}
+
+			//first get the account id from the transaction table
+			transInfo, err := r.service.getTransactionByTransRef(rc.Request.Context(), payloadHold.Data.Reference)
+			if err != nil {
+				return errors2.New("failed to retrieve transaction by ref")
+			}
+
+			//then we get the account information in search of the current balance
+			acct, err := r.service.getAccountById(rc.Request.Context(), transInfo.AccountId)
+			if err != nil {
+				return errors2.New("failed to retrieve account")
+			}
+
+			//now we get the balance of the last transaction so as to help us increment or decrement as necessary
+			currentBalance := acct.CurrentBalance + payloadHold.Data.Amount
+
+			if payloadHold.Data.Status != "success" {
+				return errors2.New("transaction is not yet a success")
+			}
+
+			if transInfo.TransactionType == "" {
+				if err := r.service.updateTrans(rc.Request.Context(), acct.Id, payloadHold.Data.Reference,
+					payloadHold.Data.Status, "credit", payloadHold.Data.Currency, string(payloadAsString),
+					payloadHold.Data.Amount, currentBalance); err != nil {
+					return errors2.New("failed to update the transaction and current balance")
+				}
+				return rc.WriteWithStatus("", http.StatusOK)
+			}
+		}
+	}
+	return errors2.New("transaction is not yet a success")
+}
 
 func (r resource) initiatedTransaction(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())

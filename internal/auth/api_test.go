@@ -11,7 +11,7 @@ package auth
 //
 //type mockService struct{}
 //
-//func (m mockService) Login(ctx context.Context, username, password string) (string, error) {
+//func (m mockService) login(ctx context.Context, username, password string) (string, error) {
 //	if username == "test" && password == "pass" {
 //		return "token-100", nil
 //	}

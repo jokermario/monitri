@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS accounts
                                 phone VARCHAR(20) UNIQUE NOT NULL,
                                 bankname VARCHAR(50) NULL,
                                 bank_account_no VARCHAR(20) NULL,
+                                current_balance INTEGER NOT NULL DEFAULT 0,    -- the current balance after the transaction
                                 confirmed_email INTEGER NOT NULL DEFAULT 0,
                                 confirm_email_token INTEGER NULL,
                                 confirm_email_expiry INTEGER NULL,
@@ -37,14 +38,13 @@ CREATE TABLE IF NOT EXISTS transactions
                                 id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
                                 account_id VARCHAR(50) NOT NULL,    -- account that owns the transaction
                                 transaction_id VARCHAR(200) NOT NULL,   -- the transaction reference
-                                amount INTEGER NULL,    -- the transaction amount
+                                amount INTEGER NOT NULL DEFAULT 0,    -- the transaction amount
                                 transaction_hash VARCHAR(200) NULL,
                                 status VARCHAR(50) NOT NULL,    -- pending, success, failed
-                                transaction_type INTEGER NOT NULL,    -- debit, credit, sell, lock, withdraw
+                                transaction_type VARCHAR(50) NOT NULL,    -- debit, credit, sell, lock, withdraw
                                 currency VARCHAR(200) NULL,
                                 current_currency_rate INTEGER NULL,    -- for crypto transactions i.e rate at time of transaction
                                 description TEXT NULL,    -- transaction description alterable by user
-                                current_balance INTEGER NULL,    -- the current balance after the transaction
                                 wallet_id VARCHAR(300) NULL,    -- for cryptocurrency
                                 recipient_wallet_id VARCHAR(300) NULL,
                                 recipient_email VARCHAR(100) NULL,
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS transactions
                                 recipient_accno VARCHAR(10) NULL,
                                 sending_wallet_id VARCHAR(300) NULL,
                                 release_date TIMESTAMP NULL,    -- for people that decide to fix their money
+                                paystack_payload TEXT NULL,
                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                             );

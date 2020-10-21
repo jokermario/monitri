@@ -24,9 +24,16 @@
       <change beforePath="$PROJECT_DIR$/cmd/server/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/server/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config/local.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config/local.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/accounts/api.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/api.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/middleware.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/accounts/repository.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/repository.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/accounts/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/auth/api_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/auth/api_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/auth/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/auth/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/auth/service_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/auth/service_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/config/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/account.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/account.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/transaction.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/transaction.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/migrations/db_tables.sql" beforeDir="false" afterPath="$PROJECT_DIR$/migrations/db_tables.sql" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -256,11 +263,11 @@
       <screen x="-1080" y="0" width="1080" height="1920" />
     </state>
     <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599671155981" />
-    <state x="1303" y="0" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1603214909909">
+    <state x="1303" y="0" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1603251859031">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1088" maximized="true" key="dock-window-6/-1080.0.1080.1920/0.0.1920.1080/-3000.0.1920.1080@-3000.0.1920.1080" timestamp="1599681446239" />
-    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603214909909" />
+    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603251859031" />
     <state x="1303" y="0" width="617" height="612" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1601830858276" />
     <state x="-26" y="-17" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1600175586989" />
     <state x="-1448" y="-19" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-3000.0.1920.1080" timestamp="1600447334737" />

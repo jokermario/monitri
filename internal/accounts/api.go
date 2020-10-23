@@ -53,7 +53,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/auth/setup2fa/<type>", res.setup2FA)
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
-//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
+	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("transaction/initialize/<referenceNo>", res.initiatedTransaction)
 }
 
@@ -108,18 +108,27 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			}
 			r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
+			_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+			var vComp string
+			if mssg != nil {
+				vComp = "no"
+			}else{
+				vComp = "yes"
+			}
+
 			type data struct {
 				//TokenType    string `json:"token_type"`
-				Email        string `json:"email"`
-				AccessToken  string `json:"access_token"`
-				ExpiryTime   int64  `json:"expires"`
-				RefreshToken string `json:"refresh_token"`
+				Email                 string `json:"email"`
+				CompletedVerification string `json:"completed_verification"`
+				AccessToken           string `json:"access_token"`
+				ExpiryTime            int64  `json:"expires"`
+				RefreshToken          string `json:"refresh_token"`
 			}
 			return c.Write(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 				Data    data   `json:"data,omitempty"`
-			}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+			}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 				hex.EncodeToString(encRefreshToken)}})
 		}
 	}
@@ -157,9 +166,17 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			return errors.InternalServerError("")
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		var vComp string
+		if mssg != nil {
+			vComp = "no"
+		}else{
+			vComp = "yes"
+		}
 		type data struct {
 			//TokenType    string `json:"token_type"`
 			Email        string `json:"email"`
+			CompletedVerification string `json:"completed_verification"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -168,7 +185,7 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -206,9 +223,18 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
+		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		var vComp string
+		if mssg != nil {
+			vComp = "no"
+		}else{
+			vComp = "yes"
+		}
+
 		type data struct {
 			//TokenType    string `json:"token_type"`
 			Email        string `json:"email"`
+			CompletedVerification string `json:"completed_verification"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -217,7 +243,7 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -255,9 +281,19 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 			return errors.InternalServerError("")
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+
+		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		var vComp string
+		if mssg != nil {
+			vComp = "no"
+		}else{
+			vComp = "yes"
+		}
+
 		type data struct {
 			//TokenType    string `json:"token_type"`
 			Email        string `json:"email"`
+			CompletedVerification string `json:"completed_verification"`
 			AccessToken  string `json:"access_token"`
 			ExpiryTime   int64  `json:"expires"`
 			RefreshToken string `json:"refresh_token"`
@@ -266,7 +302,7 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }
@@ -539,7 +575,7 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Details data   `json:"details"`
-		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusBadRequest)
+		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

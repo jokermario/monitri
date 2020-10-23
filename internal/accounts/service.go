@@ -383,9 +383,9 @@ func (s service) loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) completedVerification(ctx context.Context, id string) (error, []string, bool) {
-	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+func (s service) completedVerification(ctx context.Context, email string) (error, []string, bool) {
+	logger := s.logger.With(ctx, "account", email)
+	acc, err := s.getAccountById(ctx, email)
 	var errstrings []string
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)

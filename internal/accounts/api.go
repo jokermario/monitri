@@ -656,6 +656,11 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 			Message string `json:"message"`
 		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
 	}
+	//type DataInDataToReturn struct {
+	//	AuthorizationUrl string `json:"authorization_url,omitempty"`
+	//	AccessCode       string `json:"access_code,omitempty"`
+	//	Reference        string `json:"reference,omitempty"`
+	//}
 	type dataToReturn struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
@@ -663,8 +668,9 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 			AuthorizationUrl string `json:"authorization_url,omitempty"`
 			AccessCode       string `json:"access_code,omitempty"`
 			Reference        string `json:"reference,omitempty"`
-		}
+		} `json:"data"`
 	}
-	_ = json.Unmarshal(b, &dataToReturn{})
-	return rc.WriteWithStatus(dataToReturn{}, http.StatusOK)
+	var dta *dataToReturn
+	_ = json.Unmarshal(b, &dta)
+	return rc.WriteWithStatus(dta, http.StatusOK)
 }

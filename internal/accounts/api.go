@@ -29,7 +29,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
 	r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
 	r.Post("/new/account", res.createAccount(logger))
-	r.Post("transaction/webhook", res.paystackWebhookForTransaction)
+	r.Post("/transaction/webhook", res.paystackWebhookForTransaction)
 
 	r.Use(authHandler)
 
@@ -54,7 +54,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
-	r.Post("transaction/initialize", res.initiatedTransaction)
+	r.Post("/transaction/initialize", res.initiatedTransaction)
 }
 
 type resource struct {

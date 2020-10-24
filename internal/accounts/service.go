@@ -194,8 +194,8 @@ type Customer struct {
 
 type Plan struct {
 	ID                int     `json:"id,omitempty"`
-	CreatedAt         string  `json:"createdAt,omitempty"`
-	UpdatedAt         string  `json:"updatedAt,omitempty"`
+	CreatedAt         string  `json:"created_at,omitempty"`
+	UpdatedAt         string  `json:"updated_at,omitempty"`
 	Domain            string  `json:"domain,omitempty"`
 	Integration       int     `json:"integration,omitempty"`
 	Name              string  `json:"name,omitempty"`
@@ -1266,6 +1266,7 @@ func (s service) createTrans(ctx context.Context, id, transRef string) error {
 		TransactionId: transRef,
 		Status:        "pending",
 		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	})
 	if err != nil {
 		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)

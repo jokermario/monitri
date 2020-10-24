@@ -1265,8 +1265,8 @@ func (s service) createTrans(ctx context.Context, id, transRef string) error {
 		AccountId:     id,
 		TransactionId: transRef,
 		Status:        "pending",
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		CreatedAt:     time.Now().Format(time.RFC3339),
+		UpdatedAt:     time.Now().Format(time.RFC3339),
 	})
 	if err != nil {
 		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)

@@ -2,7 +2,6 @@ package entity
 
 import (
 	"github.com/lib/pq"
-	"time"
 )
 
 type Transactions struct {
@@ -24,6 +23,6 @@ type Transactions struct {
 	SendingWalletId     string        `json:"sending_wallet_id"`
 	ReleaseDate         string        `json:"release_date"`
 	PaystackPayload     string        `json:"-"`
-	CreatedAt           time.Time     `json:"created_at"`
-	UpdatedAt           time.Time     `json:"updated_at"`
+	CreatedAt           string        `json:"created_at"`
+	UpdatedAt           string        `json:"updated_at"`
 }

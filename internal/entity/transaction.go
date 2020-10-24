@@ -23,6 +23,6 @@ type Transactions struct {
 	SendingWalletId     string        `json:"sending_wallet_id"`
 	ReleaseDate         string        `json:"release_date"`
 	PaystackPayload     string        `json:"-"`
-	CreatedAt           string        `json:"created_at"`
-	UpdatedAt           string        `json:"updated_at"`
+	CreatedAt           string        `json:"created_at,omitempty"`
+	UpdatedAt           string        `json:"updated_at,omitempty"`
 }

@@ -267,7 +267,7 @@ type VerifyPaymentResponsePayload struct {
 type InitiateTransactionRequest struct {
 	Amount int `json:"amount"`
 	Email string `json:"email"`
-	Reference string `json:"reference"`
+	Reference string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`
 }
 
@@ -276,6 +276,7 @@ type DataInPaystackGeneralResponse struct {
 	AccessCode string `json:"access_code,omitempty"`
 	Reference string `json:"reference,omitempty"`
 }
+
 type PaystackGeneralResponse struct {
 	Status bool `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`

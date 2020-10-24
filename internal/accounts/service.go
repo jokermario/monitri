@@ -1354,7 +1354,6 @@ func (s service) initiateTransaction(ctx context.Context, id string, req Initiat
 	if err != nil {
 		s.logger.Errorf("Error:", err)
 	}
-	fmt.Println(resp.StatusCode)
 	if resp.StatusCode == 200 {
 		dataa, _ := ioutil.ReadAll(resp.Body)
 		defer resp.Body.Close()

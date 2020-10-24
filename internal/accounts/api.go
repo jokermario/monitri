@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
-	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -113,7 +112,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			var vComp string
 			if mssg != nil {
 				vComp = "no"
-			}else{
+			} else {
 				vComp = "yes"
 			}
 
@@ -171,16 +170,16 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 		var vComp string
 		if mssg != nil {
 			vComp = "no"
-		}else{
+		} else {
 			vComp = "yes"
 		}
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email        string `json:"email"`
+			Email                 string `json:"email"`
 			CompletedVerification string `json:"completed_verification"`
-			AccessToken  string `json:"access_token"`
-			ExpiryTime   int64  `json:"expires"`
-			RefreshToken string `json:"refresh_token"`
+			AccessToken           string `json:"access_token"`
+			ExpiryTime            int64  `json:"expires"`
+			RefreshToken          string `json:"refresh_token"`
 		}
 		return c.Write(struct {
 			Status  string `json:"status"`
@@ -228,17 +227,17 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 		var vComp string
 		if mssg != nil {
 			vComp = "no"
-		}else{
+		} else {
 			vComp = "yes"
 		}
 
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email        string `json:"email"`
+			Email                 string `json:"email"`
 			CompletedVerification string `json:"completed_verification"`
-			AccessToken  string `json:"access_token"`
-			ExpiryTime   int64  `json:"expires"`
-			RefreshToken string `json:"refresh_token"`
+			AccessToken           string `json:"access_token"`
+			ExpiryTime            int64  `json:"expires"`
+			RefreshToken          string `json:"refresh_token"`
 		}
 		return c.Write(struct {
 			Status  string `json:"status"`
@@ -287,17 +286,17 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 		var vComp string
 		if mssg != nil {
 			vComp = "no"
-		}else{
+		} else {
 			vComp = "yes"
 		}
 
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email        string `json:"email"`
+			Email                 string `json:"email"`
 			CompletedVerification string `json:"completed_verification"`
-			AccessToken  string `json:"access_token"`
-			ExpiryTime   int64  `json:"expires"`
-			RefreshToken string `json:"refresh_token"`
+			AccessToken           string `json:"access_token"`
+			ExpiryTime            int64  `json:"expires"`
+			RefreshToken          string `json:"refresh_token"`
 		}
 		return c.Write(struct {
 			Status  string `json:"status"`
@@ -652,12 +651,20 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
-		fmt.Println(err)
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
 	}
-
-	return rc.WriteWithStatus(string(b), http.StatusOK)
+	type dataToReturn struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data    struct {
+			AuthorizationUrl string `json:"authorization_url,omitempty"`
+			AccessCode       string `json:"access_code,omitempty"`
+			Reference        string `json:"reference,omitempty"`
+		}
+	}
+	_ = json.Unmarshal(b, &dataToReturn{})
+	return rc.WriteWithStatus(dataToReturn{}, http.StatusOK)
 }

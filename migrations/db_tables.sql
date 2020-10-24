@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS accounts
                                 managed INTEGER NOT NULL DEFAULT 0,
                                 account_manager_id VARCHAR(50) NULL,
                                 totp_secret TEXT NULL,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                             );
 CREATE TABLE IF NOT EXISTS transactions
                             (
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS transactions
                                 recipient_phone VARCHAR(20) NULL,
                                 recipient_acc_no VARCHAR(10) NULL,
                                 sending_wallet_id VARCHAR(300) NULL,
-                                release_date TIMESTAMP NULL,    -- for people that decide to fix their money
+                                release_date VARCHAR (50) NULL,    -- for people that decide to fix their money
                                 paystack_payload TEXT NULL,
                                 created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                                 updated_at TIMESTAMP WITH TIME ZONE NOT NULL

@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS transactions
                                 amount INTEGER NOT NULL DEFAULT 0,    -- the transaction amount
                                 transaction_hash VARCHAR(200) NULL,
                                 status VARCHAR(50) NOT NULL,    -- pending, success, failed
-                                transaction_type VARCHAR(50) NOT NULL,    -- debit, credit, sell, lock, withdraw
+                                transaction_type VARCHAR(50) NULL,    -- debit, credit, sell, lock, withdraw
                                 currency VARCHAR(200) NULL,
                                 current_currency_rate INTEGER NULL,    -- for crypto transactions i.e rate at time of transaction
                                 description TEXT NULL,    -- transaction description alterable by user

@@ -648,11 +648,11 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	var input InitiateTransactionRequest
 	if err := rc.Read(&input); err != nil {
-		fmt.Println(err)
 		return errors.BadRequest("problems occurred reading the payload")
 	}
 	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
+		fmt.Println(err)
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`

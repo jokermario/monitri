@@ -19,9 +19,7 @@
     <select />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/internal/accounts/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/service.go" afterDir="false" />
-    </list>
+    <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -259,10 +257,10 @@
     <state x="-26" y="-17" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1600175586989" />
     <state x="-1448" y="-19" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-3000.0.1920.1080" timestamp="1600447334737" />
     <state x="-1596" y="-10" width="1918" height="1078" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600672439152" />
-    <state x="-1550" y="231" width="583" height="849" key="find.popup" timestamp="1603214925720">
+    <state x="-1550" y="231" width="583" height="849" key="find.popup" timestamp="1603543368358">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1550" y="231" width="583" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603214925720" />
+    <state x="-1550" y="231" width="583" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603543368358" />
     <state x="370" y="231" width="583" height="849" key="find.popup/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600679005176" />
     <state x="668" y="257" width="583" height="624" key="find.popup/0.0.1920.1080@0.0.1920.1080" timestamp="1599470533407" />
     <state x="785" y="299" key="refactoring.ChangeSignatureDialog" timestamp="1601189888987">

@@ -265,7 +265,7 @@ type VerifyPaymentResponsePayload struct {
 }
 
 type InitiateTransactionRequest struct {
-	Amount int `json:"amount"`
+	Amount string `json:"amount"`
 	Email string `json:"email"`
 	Reference string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`

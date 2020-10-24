@@ -656,13 +656,9 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 			Message string `json:"message"`
 		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
 	}
-	//type DataInDataToReturn struct {
-	//	AuthorizationUrl string `json:"authorization_url,omitempty"`
-	//	AccessCode       string `json:"access_code,omitempty"`
-	//	Reference        string `json:"reference,omitempty"`
-	//}
+
 	type dataToReturn struct {
-		Status  string `json:"status"`
+		Status  bool `json:"status"`
 		Message string `json:"message"`
 		Data    struct {
 			AuthorizationUrl string `json:"authorization_url,omitempty"`

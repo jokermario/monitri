@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS transactions
                                 sending_wallet_id VARCHAR(300) NULL,
                                 release_date TIMESTAMP NULL,    -- for people that decide to fix their money
                                 paystack_payload TEXT NULL,
-                                created_at VARCHAR (50) NOT NULL,
-                                updated_at VARCHAR (50) NOT NULL
+                                created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                                updated_at TIMESTAMP WITH TIME ZONE NOT NULL
                             );
 CREATE TABLE IF NOT EXISTS wallets
                             (

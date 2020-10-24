@@ -1260,13 +1260,14 @@ func (s service) getTransactionByTransRef(ctx context.Context, transRef string) 
 //}
 
 func (s service) createTrans(ctx context.Context, id, transRef string) error {
+	//.Format(time.RFC3339),
 	logger := s.logger.With(ctx, "transaction", id)
 	err := s.repo.TransactionCreate(ctx, entity.Transactions{
 		AccountId:     id,
 		TransactionId: transRef,
 		Status:        "pending",
-		CreatedAt:     time.Now().Format(time.RFC3339),
-		UpdatedAt:     time.Now().Format(time.RFC3339),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	})
 	if err != nil {
 		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)

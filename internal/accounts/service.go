@@ -100,7 +100,7 @@ type service struct {
 	RefreshTokenExpiration int
 	EncKey                 string
 	PSec                   string
-	PaystackUrl      string
+	PaystackUrl            string
 }
 
 type Account struct {
@@ -259,28 +259,28 @@ type ChargeSuccessPayload struct {
 }
 
 type VerifyPaymentResponsePayload struct {
-	Status  bool	`json:"status,omitempty"`
-	Message string	`json:"message,omitempty"`
-	Data	DataInVerifyPaymentResponsePayload	`json:"data,omitempty"`
+	Status  bool                               `json:"status,omitempty"`
+	Message string                             `json:"message,omitempty"`
+	Data    DataInVerifyPaymentResponsePayload `json:"data,omitempty"`
 }
 
 type InitiateTransactionRequest struct {
-	Amount string `json:"amount"`
-	Email string `json:"email"`
+	Amount    string `json:"amount"`
+	Email     string `json:"email"`
 	Reference string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`
 }
 
 type DataInPaystackGeneralResponse struct {
 	AuthorizationUrl string `json:"authorization_url,omitempty"`
-	AccessCode string `json:"access_code,omitempty"`
-	Reference string `json:"reference,omitempty"`
+	AccessCode       string `json:"access_code,omitempty"`
+	Reference        string `json:"reference,omitempty"`
 }
 
 type PaystackGeneralResponse struct {
-	Status bool `json:"status,omitempty"`
-	Message string `json:"message,omitempty"`
-	Data DataInPaystackGeneralResponse `json:"data,omitempty"`
+	Status  bool                          `json:"status,omitempty"`
+	Message string                        `json:"message,omitempty"`
+	Data    DataInPaystackGeneralResponse `json:"data,omitempty"`
 }
 
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
@@ -335,7 +335,7 @@ func (itr InitiateTransactionRequest) validate() error {
 	return validation.ValidateStruct(&itr,
 		validation.Field(&itr.Amount, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 		validation.Field(&itr.Email, validation.Required, is.Email))
-		//validation.Field(&itr.Reference, validation.Required, validation.Match(regexp.MustCompile("^[a-z0-9-]+$"))))
+	//validation.Field(&itr.Reference, validation.Required, validation.Match(regexp.MustCompile("^[a-z0-9-]+$"))))
 }
 
 //-------------------------------------------------NON-SPECIFIC FUNCTIONS-----------------------------------------------
@@ -1265,6 +1265,7 @@ func (s service) createTrans(ctx context.Context, id, transRef string) error {
 		AccountId:     id,
 		TransactionId: transRef,
 		Status:        "pending",
+		CreatedAt:     time.Now(),
 	})
 	if err != nil {
 		logger.Errorf("error occurred while trying to create a transaction for the user %s", id)
@@ -1325,14 +1326,14 @@ func (s service) verifyOnPaystack(transRef string) bool {
 	return false
 }
 
-func (s service) initiateTransaction(ctx context.Context, id string,  req InitiateTransactionRequest) ([]byte, error) {
+func (s service) initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error) {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
 		fmt.Printf("valdation error is: %s", err)
 		return nil, err
 	}
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
-	req.Reference = strconv.Itoa(int(time.Now().Unix()))+"-"+strconv.Itoa(int(RandomCrypto.Int64()))
+	req.Reference = strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(RandomCrypto.Int64()))
 
 	u, _ := url.ParseRequestURI(s.PaystackUrl)
 	urlToString := u.String()

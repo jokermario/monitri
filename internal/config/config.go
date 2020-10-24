@@ -30,7 +30,7 @@ type Config struct {
 	//paystack public key
 	PPub string `yaml:"p_pub" env:"P_PUB,secret"`
 	//paystack seceret key
-	PSec string `yaml:"p_sec" env:"P_SEC, secret"`
+	PSec string `yaml:"p_sec" env:"P_SEC,secret"`
 	//paystack verify payment url
 	PaystackURL string `yaml:"paystack_url" env:"PAYSTACK_URL"`
 	// JWT access token signing key. required.

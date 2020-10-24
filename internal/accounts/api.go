@@ -54,7 +54,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
-	r.Post("transaction/initialize/<referenceNo>", res.initiatedTransaction)
+	r.Post("transaction/initialize", res.initiatedTransaction)
 }
 
 type resource struct {
@@ -645,15 +645,17 @@ func (r resource) paystackWebhookForTransaction(rc *routing.Context) error {
 
 func (r resource) initiatedTransaction(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	if err := r.service.createTrans(rc.Request.Context(), identity.GetID(), rc.Param("referenceNo")); err != nil {
+	var input InitiateTransactionRequest
+	if err := rc.Read(&input); err != nil {
+		return errors.BadRequest("problems occurred reading the payload")
+	}
+	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
+	if err != nil {
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
 	}
 
-	return rc.WriteWithStatus(struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
-	}{"success", "transaction initialized"}, http.StatusOK)
+	return rc.WriteWithStatus(string(b), http.StatusOK)
 }

@@ -32,7 +32,7 @@ type Config struct {
 	//paystack seceret key
 	PSec string `yaml:"p_sec" env:"P_SEC, secret"`
 	//paystack verify payment url
-	PaystackVerifyPaymentURL string `yaml:"paystack_verify_url" env:"PAYSTACK_VERIFY_URL"`
+	PaystackURL string `yaml:"paystack_url" env:"PAYSTACK_URL"`
 	// JWT access token signing key. required.
 	AccessTokenSigningKey string `yaml:"jwt_access_token_signing_key" env:"JWT_ACCESS_TOKEN_SIGNING_KEY,secret"`
 	// JWT refresh token signing key. required.

@@ -75,6 +75,7 @@ type Service interface {
 	updateTrans(ctx context.Context, id, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error
 	webHookValid(payload, payStackSig string) bool
 	verifyOnPaystack(transRef string) bool
+	initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -99,7 +100,7 @@ type service struct {
 	RefreshTokenExpiration int
 	EncKey                 string
 	PSec                   string
-	PaystackVerifyUrl      string
+	PaystackUrl      string
 }
 
 type Account struct {
@@ -263,11 +264,29 @@ type VerifyPaymentResponsePayload struct {
 	Data	DataInVerifyPaymentResponsePayload	`json:"data,omitempty"`
 }
 
+type InitiateTransactionRequest struct {
+	Amount int `json:"amount"`
+	Email string `json:"email"`
+	Reference string `json:"reference"`
+	//Channels []string `json:"channels,omitempty"`
+}
+
+type DataInPaystackGeneralResponse struct {
+	AuthorizationUrl string `json:"authorization_url,omitempty"`
+	AccessCode string `json:"access_code,omitempty"`
+	Reference string `json:"reference,omitempty"`
+}
+type PaystackGeneralResponse struct {
+	Status bool `json:"status,omitempty"`
+	Message string `json:"message,omitempty"`
+	Data DataInPaystackGeneralResponse `json:"data,omitempty"`
+}
+
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackVerifyUrl string) Service {
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackUrl string) Service {
 	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration, EncKey, PSec, PaystackVerifyUrl}
+		RefreshTokenExpiration, EncKey, PSec, PaystackUrl}
 }
 
 func (lr LoginRequest) validate() error {
@@ -309,6 +328,13 @@ func (uar UpdateAccountRequest) validate() error {
 func (cpr ChangePasswordRequest) validate() error {
 	return validation.ValidateStruct(&cpr,
 		validation.Field(&cpr.Password, validation.Required, validation.Length(8, 0)))
+}
+
+func (itr InitiateTransactionRequest) validate() error {
+	return validation.ValidateStruct(&itr,
+		validation.Field(&itr.Amount, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
+		validation.Field(&itr.Email, validation.Required, is.Email))
+		//validation.Field(&itr.Reference, validation.Required, validation.Match(regexp.MustCompile("^[a-z0-9-]+$"))))
 }
 
 //-------------------------------------------------NON-SPECIFIC FUNCTIONS-----------------------------------------------
@@ -1274,10 +1300,10 @@ func (s service) updateTrans(ctx context.Context, acctId, transRef, status, tran
 }
 
 func (s service) verifyOnPaystack(transRef string) bool {
-	u, _ := url.ParseRequestURI(s.PaystackVerifyUrl)
+	u, _ := url.ParseRequestURI(s.PaystackUrl)
 	urlToString := u.String()
 
-	req, _ := http.NewRequest(http.MethodGet, urlToString+"/"+transRef, nil)
+	req, _ := http.NewRequest(http.MethodGet, urlToString+"/transaction/verify/"+transRef, nil)
 	req.Header.Add("Authorization", "Bearer "+s.PSec)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -1296,6 +1322,51 @@ func (s service) verifyOnPaystack(transRef string) bool {
 		}
 	}
 	return false
+}
+
+func (s service) initiateTransaction(ctx context.Context, id string,  req InitiateTransactionRequest) ([]byte, error) {
+	logger := s.logger.With(ctx, "account", req.Email)
+	if err := req.validate(); err != nil {
+		return nil, err
+	}
+	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
+	req.Reference = strconv.Itoa(int(time.Now().Unix()))+"-"+strconv.Itoa(int(RandomCrypto.Int64()))
+
+	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	urlToString := u.String()
+
+	b, err := json.Marshal(req)
+	if err != nil {
+		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
+		return nil, err
+	}
+
+	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transaction/initialize", bytes.NewBuffer(b))
+	request.Header.Add("Authorization", "Bearer "+s.PSec)
+	request.Header.Add("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		s.logger.Errorf("Error:", err)
+	}
+	if resp.StatusCode == 200 {
+		dataa, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+
+		var responsePayload *PaystackGeneralResponse
+		_ = json.Unmarshal(dataa, &responsePayload)
+		respJson, err := json.Marshal(responsePayload)
+		if err != nil {
+			logger.Errorf("An error occurred while trying to convert the response struct to json. Error msg is: %s", err)
+			return nil, err
+		}
+		if err := s.createTrans(ctx, id, responsePayload.Data.Reference); err != nil {
+			logger.Errorf("An error occurred while trying to write transaction to DB. Error msg is: %s", err)
+			return nil, err
+		}
+		return respJson, nil
+	}
+	return nil, errors.BadRequest("")
 }
 
 //----------------------------------------------------REDIS FUNCTIONS---------------------------------------------------

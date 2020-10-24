@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
+	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -651,6 +652,7 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
+		fmt.Println(err)
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`

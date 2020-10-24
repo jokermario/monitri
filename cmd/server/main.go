@@ -132,7 +132,7 @@ func buildHandler(logger log.Logger, db *dbcontext.DB, cfg *config.Config, redis
 			cfg.RefreshTokenExpiration,
 			cfg.EncKey,
 			cfg.PSec,
-			cfg.PaystackVerifyPaymentURL),
+			cfg.PaystackURL),
 		cfg.AccessTokenSigningKey, cfg.RefreshTokenSigningKey, logger, redisConn)
 
 	//auth.RegisterHandlers(rg.Group(""),

@@ -1328,6 +1328,7 @@ func (s service) verifyOnPaystack(transRef string) bool {
 func (s service) initiateTransaction(ctx context.Context, id string,  req InitiateTransactionRequest) ([]byte, error) {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
+		fmt.Printf("valdation error is: %s", err)
 		return nil, err
 	}
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)

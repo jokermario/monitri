@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
-	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"

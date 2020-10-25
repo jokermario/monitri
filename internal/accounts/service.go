@@ -1259,11 +1259,13 @@ func (s service) getTransactionByTransRef(ctx context.Context, transRef string) 
 //	return Transaction{trans}, nil
 //}
 
-func (s service) createTrans(ctx context.Context, id, transRef string) error {
+func (s service) createTrans(ctx context.Context, accId, transRef string) error {
 	//.Format(time.RFC3339),
-	logger := s.logger.With(ctx, "transaction", id)
+	logger := s.logger.With(ctx, "transaction", accId)
+	id := entity.GenerateID()
 	err := s.repo.TransactionCreate(ctx, entity.Transactions{
-		AccountId:     id,
+		Id:            id,
+		AccountId:     accId,
 		TransactionId: transRef,
 		Status:        "pending",
 		CreatedAt:     time.Now(),

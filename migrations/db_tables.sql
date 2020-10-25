@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS accounts
                             );
 CREATE TABLE IF NOT EXISTS transactions
                             (
-                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                id VARCHAR(50) UNIQUE NOT NULL PRIMARY KEY,
                                 account_id VARCHAR(50) NOT NULL,    -- account that owns the transaction
                                 transaction_id VARCHAR(200) NOT NULL,   -- the transaction reference
                                 amount INTEGER NOT NULL DEFAULT 0,    -- the transaction amount
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS transactions
                             );
 CREATE TABLE IF NOT EXISTS wallets
                             (
-                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                id VARCHAR(50) UNIQUE NOT NULL PRIMARY KEY,
                                 account_id VARCHAR(50) NOT NULL,
                                 wallet_id VARCHAR(300) NOT NULL,
                                 wallet_address VARCHAR(300) NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS wallets
                             );
 CREATE TABLE IF NOT EXISTS settings
                             (
-                                id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                id VARCHAR(50) UNIQUE NOT NULL PRIMARY KEY,
                                 account_id VARCHAR(50) UNIQUE NOT NULL,
                                 twoFA_email INTEGER NOT NULL DEFAULT 0,
                                 twoFA_phone INTEGER NOT NULL DEFAULT 0,

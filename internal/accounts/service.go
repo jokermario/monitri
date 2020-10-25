@@ -1297,8 +1297,9 @@ func (s service) updateTrans(ctx context.Context, acctId, transRef, status, tran
 	acct.CurrentBalance = currentBalance
 	updateErr := s.repo.updateAccountAndTransactionTableTrans(ctx, acct.Accounts, trans.Transactions)
 	if updateErr != nil {
+		fmt.Println(updateErr)
 		logger.Errorf("error occurred while trying to update a transaction with transaction ref %s", transRef)
-		return err
+		return updateErr
 	}
 	return nil
 }

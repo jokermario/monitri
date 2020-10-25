@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
-	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -30,7 +29,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
 	r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
 	r.Post("/new/account", res.createAccount(logger))
-	r.Post("/transaction/webhook", res.paystackWebhookForTransaction)
+	r.Post("/transaction/webhook", res.paystackWebhookForTransaction(logger))
 
 	r.Use(authHandler)
 

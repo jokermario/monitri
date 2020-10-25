@@ -6,7 +6,7 @@ import (
 )
 
 type Transactions struct {
-	Id                  pq.Int64Array `db:"-" json:"-"`
+	Id                  pq.Int64Array `json:"-"`
 	AccountId           string        `json:"account_id"`
 	TransactionId       string        `json:"transaction_id"`
 	Amount              int           `json:"amount"`

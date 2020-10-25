@@ -586,71 +586,75 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
-func (r resource) paystackWebhookForTransaction(rc *routing.Context) error {
-	if rc.Request.Method != http.MethodPost {
-		fmt.Println("http method error")
-		return errors2.New("invalid HTTP Method")
-	}
-	signature := rc.Request.Header.Get("X-Paystack-Signature")
-	if len(signature) > 0 {
-		payload, err := ioutil.ReadAll(rc.Request.Body)
-		if err != nil || len(payload) == 0 {
-			fmt.Printf("reading request body error: %s", err)
-			return errors2.New("error passing payload")
+func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handler {
+	return func (rc *routing.Context) error {
+		logger := logger.With(rc.Request.Context(), "requestIpLoc", rc.Request.RemoteAddr)
+		logger.Error("test")
+		if rc.Request.Method != http.MethodPost {
+			logger.Error("http method error")
+			return errors2.New("invalid HTTP Method")
 		}
-		if ok := r.service.webHookValid(string(payload), signature); !ok {
-			fmt.Println("webhook aint valid")
-			return errors2.New("webhook is not valid")
-		}
-		var tmp map[string]interface{}
-		_ = json.Unmarshal(payload, &tmp)
-
-		if tmp["event"] == "charge.success" {
-			var payloadHold ChargeSuccessPayload
-			_ = json.Unmarshal(payload, &payloadHold)
-			payloadAsString, _ := json.Marshal(payloadHold)
-
-			//verify payment on paystack
-			if ok := r.service.verifyOnPaystack(payloadHold.Data.Reference); !ok {
-				fmt.Println("payment verification failed")
-				return errors2.New("payment failed verification")
+		signature := rc.Request.Header.Get("X-Paystack-Signature")
+		if len(signature) > 0 {
+			payload, err := ioutil.ReadAll(rc.Request.Body)
+			if err != nil || len(payload) == 0 {
+				logger.Errorf("reading request body error: %s", err)
+				return errors2.New("error passing payload")
 			}
-
-			//first get the account id from the transaction table
-			transInfo, err := r.service.getTransactionByTransRef(rc.Request.Context(), payloadHold.Data.Reference)
-			if err != nil {
-				fmt.Printf("failed to retrieve transaction by ref: %s", err)
-				return errors2.New("failed to retrieve transaction by ref")
+			if ok := r.service.webHookValid(string(payload), signature); !ok {
+				logger.Error("webhook is not valid")
+				return errors2.New("webhook is not valid")
 			}
+			var tmp map[string]interface{}
+			_ = json.Unmarshal(payload, &tmp)
 
-			//then we get the account information in search of the current balance
-			acct, err := r.service.getAccountById(rc.Request.Context(), transInfo.AccountId)
-			if err != nil {
-				fmt.Printf("failed to retrieve account: %s", err)
-				return errors2.New("failed to retrieve account")
-			}
+			if tmp["event"] == "charge.success" {
+				var payloadHold ChargeSuccessPayload
+				_ = json.Unmarshal(payload, &payloadHold)
+				payloadAsString, _ := json.Marshal(payloadHold)
 
-			//now we get the balance of the last transaction so as to help us increment or decrement as necessary
-			currentBalance := acct.CurrentBalance + payloadHold.Data.Amount
-
-			if payloadHold.Data.Status != "success" {
-				fmt.Println("trans not success")
-				return errors2.New("transaction is not yet a success")
-			}
-
-			if transInfo.TransactionType == "" {
-				if err := r.service.updateTrans(rc.Request.Context(), acct.Id, payloadHold.Data.Reference,
-					payloadHold.Data.Status, "credit", payloadHold.Data.Currency, string(payloadAsString),
-					payloadHold.Data.Amount, currentBalance); err != nil {
-					fmt.Printf("failed to update the transaction and current balance: %s", err)
-					return errors2.New("failed to update the transaction and current balance")
+				//verify payment on paystack
+				if ok := r.service.verifyOnPaystack(payloadHold.Data.Reference); !ok {
+					logger.Error("payment verification failed")
+					return errors2.New("payment failed verification")
 				}
-				return rc.WriteWithStatus("", http.StatusOK)
+
+				//first get the account id from the transaction table
+				transInfo, err := r.service.getTransactionByTransRef(rc.Request.Context(), payloadHold.Data.Reference)
+				if err != nil {
+					logger.Errorf("failed to retrieve transaction by ref: %s", err)
+					return errors2.New("failed to retrieve transaction by ref")
+				}
+
+				//then we get the account information in search of the current balance
+				acct, err := r.service.getAccountById(rc.Request.Context(), transInfo.AccountId)
+				if err != nil {
+					logger.Errorf("failed to retrieve account: %s", err)
+					return errors2.New("failed to retrieve account")
+				}
+
+				//now we get the balance of the last transaction so as to help us increment or decrement as necessary
+				currentBalance := acct.CurrentBalance + payloadHold.Data.Amount
+
+				if payloadHold.Data.Status != "success" {
+					logger.Error("trans not success")
+					return errors2.New("transaction is not yet a success")
+				}
+
+				if transInfo.TransactionType == "" {
+					if err := r.service.updateTrans(rc.Request.Context(), acct.Id, payloadHold.Data.Reference,
+						payloadHold.Data.Status, "credit", payloadHold.Data.Currency, string(payloadAsString),
+						payloadHold.Data.Amount, currentBalance); err != nil {
+						logger.Errorf("failed to update the transaction and current balance: %s", err)
+						return errors2.New("failed to update the transaction and current balance")
+					}
+					return rc.WriteWithStatus("", http.StatusOK)
+				}
 			}
 		}
+		logger.Errorf("transaction is not yet a success")
+		return errors2.New("transaction is not yet a success")
 	}
-	fmt.Printf("not yet success")
-	return errors2.New("transaction is not yet a success")
 }
 
 func (r resource) initiatedTransaction(rc *routing.Context) error {

@@ -14,8 +14,9 @@ CREATE TABLE IF NOT EXISTS accounts
                                 password VARCHAR(100) NOT NULL,
                                 address TEXT NULL,
                                 phone VARCHAR(20) UNIQUE NOT NULL,
-                                bankname VARCHAR(50) NULL,
+                                bank_code VARCHAR(10) NULL,
                                 bank_account_no VARCHAR(20) NULL,
+                                recipient_code VARCHAR(100) NULL,
                                 current_balance INTEGER NOT NULL DEFAULT 0,    -- the current balance after the transaction
                                 confirmed_email INTEGER NOT NULL DEFAULT 0,
                                 confirm_email_token INTEGER NULL,

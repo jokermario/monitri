@@ -76,6 +76,7 @@ type Service interface {
 	webHookValid(payload, payStackSig string) bool
 	verifyOnPaystack(transRef string) bool
 	initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error)
+	getBanks(ctx context.Context) ([]byte, error)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -433,10 +434,11 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 		errstrings = append(errstrings, "")
 	}
 
-	//if acc.ConfirmedEmail != 1 && acc.ConfirmedPhone != 1 && acc.Dob == "" {
-	//	return nil, "email and phone has not been verified, and profile has not been updated", false
-	//}
-	return nil, errstrings, true
+	if errstrings != nil {
+		return nil, errstrings, false
+	}
+	fmt.Println(errstrings)
+	return nil, nil, true
 }
 
 // authenticate authenticates a accounts using username and password.
@@ -1237,6 +1239,78 @@ func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool
 	return true
 }
 
+func (s service) getBanks(ctx context.Context) ([]byte, error) {
+	logger := s.logger.With(ctx)
+	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	urlToString := u.String()
+
+	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank", nil)
+	request.Header.Add("Authorization", "Bearer "+s.PSec)
+
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		logger.Errorf("Error:", err)
+		return nil, err
+	}
+	if resp.StatusCode == 200 {
+		dataa, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+
+		return dataa, nil
+	}
+
+	return nil, errors.InternalServerError("An unhandled error occurred")
+}
+
+func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error) {
+	logger := s.logger.With(ctx)
+
+	data := url.Values{}
+	data.Set("account_number", bankAcctNo)
+	data.Set("bank_code", bankCode)
+
+	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	urlToString := u.String()
+
+	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank/resolve", strings.NewReader(data.Encode()))
+	request.Header.Add("Authorization", "Bearer "+s.PSec)
+
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		logger.Errorf("Error:", err)
+		return nil, false, err
+	}
+	if resp.StatusCode == 200 {
+		data, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+
+		return data, true, nil
+	}
+
+	return nil, false, errors.InternalServerError("An unhandled error occurred")
+}
+
+//func (s service) setBankDetails(ctx context.Context, email, bankCode, bankName, bankAcctNo string) error {
+//	logger := s.logger.With(ctx, "account", email)
+//
+//	_, ok, err := s.verifyBankAcctNo(ctx, bankCode, bankAcctNo)
+//	if !ok {
+//		logger.Error("An error occurred while trying to verify the account number")
+//		return err
+//	}
+//
+//	_, _, ok = s.completedVerification(ctx, email)
+//	if !ok {
+//		logger.Error("Must verify email, phone and update profile before you continue")
+//		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
+//	}
+//
+//	acct, err := s.getAccountByEmail(ctx, email)
+//	if err != nil {
+//		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
+//	}
+//}
+
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 
 func (s service) getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
@@ -1355,7 +1429,8 @@ func (s service) initiateTransaction(ctx context.Context, id string, req Initiat
 
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
-		s.logger.Errorf("Error:", err)
+		logger.Errorf("Error:", err)
+		return nil, err
 	}
 	if resp.StatusCode == 200 {
 		dataa, _ := ioutil.ReadAll(resp.Body)

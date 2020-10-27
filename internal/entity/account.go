@@ -18,7 +18,7 @@ type Accounts struct {
 	Password           string    `json:"-"`
 	Address            string    `json:"address,omitempty"`
 	Phone              string    `json:"phone,omitempty"`
-	Bankname           string    `json:"bankname,omitempty"`
+	BankCode           string    `json:"bank_code,omitempty"`
 	BankAccountNo      string    `json:"bank_account_no,omitempty"`
 	CurrentBalance     int       `json:"current_balance"`
 	ConfirmedEmail     int       `json:"confirmed_email,omitempty"`
@@ -89,7 +89,7 @@ func (a Accounts) GetPhone() string {
 }
 
 func (a Accounts) GetBankName() string {
-	return a.Bankname
+	return a.BankCode
 }
 
 func (a Accounts) GetBankAccountNo() string {

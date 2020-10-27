@@ -588,7 +588,6 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handler {
 	return func (rc *routing.Context) error {
 		logger := logger.With(rc.Request.Context(), "requestIpLoc", rc.Request.RemoteAddr)
-		logger.Error("test")
 		if rc.Request.Method != http.MethodPost {
 			logger.Error("http method error")
 			return errors2.New("invalid HTTP Method")

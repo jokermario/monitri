@@ -68,7 +68,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, email string) (error, []interface{}, bool)
+	completedVerification(ctx context.Context, email string) (error, interface{}, bool)
 	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
 	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createTrans(ctx context.Context, id, transRef string) error
@@ -435,34 +435,35 @@ func (s service) loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) completedVerification(ctx context.Context, email string) (error, []interface{}, bool) {
+func (s service) completedVerification(ctx context.Context, email string) (error, interface{}, bool) {
 	logger := s.logger.With(ctx, "account", email)
 	acc, err := s.getAccountByEmail(ctx, email)
-	var errstrings []interface{}
+	errstrings := make(map[string]interface{})
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
-		return err, append(errstrings, "error"), false
+		errstrings["error"] = "error"
+		return err, errstrings["error"], false
 	}
 	if acc.ConfirmedEmail != 1 {
-		errstrings = append(errstrings, "email not verified")
+		errstrings["email"] = "email not verified"
 	} else {
-		errstrings = append(errstrings, nil)
+		errstrings["email"] = nil
 	}
 	if acc.ConfirmedPhone != 1 {
-		errstrings = append(errstrings, "phone not verified")
+		errstrings["phone"] = "phone not verified"
 	} else {
-		errstrings = append(errstrings, nil)
+		errstrings["phone"] = nil
 	}
 	if acc.Dob == "" {
-		errstrings = append(errstrings, "profile not updated")
+		errstrings["profile"] = "profile not updated"
 	} else {
-		errstrings = append(errstrings, nil)
+		errstrings["profile"] = nil
 	}
 
 	fmt.Println(len(errstrings))
 	fmt.Println(errstrings)
 
-	if errstrings != nil {
+	if errstrings["email"] != nil || errstrings["phone"] != nil || errstrings["profile"] != nil {
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue"), errstrings, false
 	} else {
 		return nil, nil, true

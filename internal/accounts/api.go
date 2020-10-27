@@ -425,9 +425,19 @@ func (r resource) refreshToken(rc *routing.Context) error {
 	}
 	//deletes the refresh token from redis
 	_ = r.service.logOut(rc.Request.Context(), r.redisConn, identity.GetRefreshID())
+
+	err, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetEmail())
+	var vComp string
+	if mssg != nil && err != nil {
+		vComp = "no"
+	} else {
+		vComp = "yes"
+	}
+
 	type data struct {
 		//TokenType    string `json:"token_type"`
 		Email        string `json:"email"`
+		CompletedVerification string `json:"completed_verification"`
 		AccessToken  string `json:"access_token"`
 		ExpiryTime   int64  `json:"expires"`
 		RefreshToken string `json:"refresh_token"`
@@ -436,7 +446,7 @@ func (r resource) refreshToken(rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 		Data    data   `json:"data,omitempty"`
-	}{"success", "tokens generated", data{identity.GetEmail(), hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+	}{"success", "tokens generated", data{identity.GetEmail(), vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 		hex.EncodeToString(encRefreshToken)}})
 }
 

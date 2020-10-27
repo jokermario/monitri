@@ -438,7 +438,7 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	fmt.Println(len(errstrings))
 	fmt.Println(errstrings)
 
-	if errstrings != nil {
+	if len(errstrings) > 3 {
 		return nil, errstrings, false
 	}else{
 		return nil, nil, true

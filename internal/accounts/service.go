@@ -435,7 +435,7 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 		errstrings = append(errstrings, "")
 	}
 
-	fmt.Printf("the errorstring: %s", errstrings)
+	fmt.Printf("the errorstring: %s", len(errstrings))
 
 	if errstrings != nil {
 		return nil, errstrings, false

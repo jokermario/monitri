@@ -446,18 +446,12 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	}
 	if acc.ConfirmedEmail != 1 {
 		errstrings["email"] = "email not verified"
-	} else {
-		errstrings["email"] = nil
 	}
 	if acc.ConfirmedPhone != 1 {
 		errstrings["phone"] = "phone not verified"
-	} else {
-		errstrings["phone"] = nil
 	}
 	if acc.Dob == "" {
 		errstrings["profile"] = "profile not updated"
-	} else {
-		errstrings["profile"] = nil
 	}
 
 	fmt.Println(len(errstrings))

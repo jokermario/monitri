@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS accounts
                                 phone VARCHAR(20) UNIQUE NOT NULL,
                                 bank_code VARCHAR(10) NULL,
                                 bank_account_no VARCHAR(20) NULL,
+                                bank_name VARCHAR(100) NULL,
                                 recipient_code VARCHAR(100) NULL,
                                 current_balance INTEGER NOT NULL DEFAULT 0,    -- the current balance after the transaction
                                 confirmed_email INTEGER NOT NULL DEFAULT 0,

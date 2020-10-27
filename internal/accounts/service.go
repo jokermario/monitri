@@ -441,7 +441,7 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	var errstrings []interface{}
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
-		return err, nil, false
+		return err, append(errstrings, "error"), false
 	}
 	if acc.ConfirmedEmail != 1 {
 		errstrings = append(errstrings, "email not verified")

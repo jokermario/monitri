@@ -564,7 +564,7 @@ func (r resource) setup2FA(rc *routing.Context) error {
 
 func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	_, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetID())
+	_, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetEmail())
 	if mssg != nil {
 		type data struct {
 			Email   string `json:"email,omitempty"`

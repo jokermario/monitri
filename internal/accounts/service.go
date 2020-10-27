@@ -68,7 +68,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, id string) (error, []string, bool)
+	completedVerification(ctx context.Context, email string) (error, []string, bool)
 	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
 	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createTrans(ctx context.Context, id, transRef string) error
@@ -417,6 +417,7 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	var errstrings []string
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
+		return err, nil, false
 	}
 	if acc.ConfirmedEmail != 1 {
 		errstrings = append(errstrings, "email not verified")
@@ -433,6 +434,8 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	} else {
 		errstrings = append(errstrings, "")
 	}
+
+	fmt.Printf("the errorstring: %s", errstrings)
 
 	if errstrings != nil {
 		return nil, errstrings, false

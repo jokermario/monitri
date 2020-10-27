@@ -566,16 +566,12 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetEmail())
 	if mssg != nil && err != nil {
-		type data struct {
-			Email   string `json:"email,omitempty"`
-			Phone   string `json:"phone,omitempty"`
-			Profile string `json:"profile,omitempty"`
-		}
+
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Details interface{}   `json:"details"`
-		}{"failed", "not completed", mssg}, http.StatusOK)
+		}{"failed", "not completed", mssg }, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

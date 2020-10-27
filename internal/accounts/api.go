@@ -108,9 +108,9 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			}
 			r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
-			_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+			err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
 			var vComp string
-			if mssg != nil {
+			if mssg != nil && err != nil {
 				vComp = "no"
 			} else {
 				vComp = "yes"
@@ -166,9 +166,9 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			return errors.InternalServerError("")
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
-		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
 		var vComp string
-		if mssg != nil {
+		if mssg != nil && err != nil {
 			vComp = "no"
 		} else {
 			vComp = "yes"
@@ -223,9 +223,9 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
-		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
 		var vComp string
-		if mssg != nil {
+		if mssg != nil && err != nil {
 			vComp = "no"
 		} else {
 			vComp = "yes"
@@ -282,9 +282,9 @@ func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
 		}
 		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
 
-		_, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+		err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
 		var vComp string
-		if mssg != nil {
+		if mssg != nil && err != nil {
 			vComp = "no"
 		} else {
 			vComp = "yes"
@@ -564,8 +564,8 @@ func (r resource) setup2FA(rc *routing.Context) error {
 
 func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	_, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetEmail())
-	if mssg != nil {
+	err, mssg, _ := r.service.completedVerification(rc.Request.Context(), identity.GetEmail())
+	if mssg != nil && err != nil {
 		type data struct {
 			Email   string `json:"email,omitempty"`
 			Phone   string `json:"phone,omitempty"`

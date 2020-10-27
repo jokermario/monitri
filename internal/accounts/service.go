@@ -463,7 +463,7 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	fmt.Println(errstrings)
 
 	if errstrings != nil {
-		return nil, errstrings, false
+		return errors.InternalServerError("Must verify email, phone and update profile before you continue"), errstrings, false
 	} else {
 		return nil, nil, true
 	}

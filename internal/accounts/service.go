@@ -436,9 +436,9 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 
 	if errstrings != nil {
 		return nil, errstrings, false
+	}else{
+		return nil, nil, true
 	}
-
-	return nil, nil, true
 }
 
 // authenticate authenticates a accounts using username and password.

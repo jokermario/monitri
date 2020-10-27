@@ -68,7 +68,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email, phone, Type string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, email string) (error, []string, bool)
+	completedVerification(ctx context.Context, email string) (error, []interface{}, bool)
 	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
 	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createTrans(ctx context.Context, id, transRef string) error
@@ -271,31 +271,7 @@ type InitiateTransactionRequest struct {
 	Reference string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`
 }
-"type": "nuban",
 
-"name": "Zombie",
-
-"description": "Zombier",
-
-"metadata": {
-
-"job": "Flesh Eater"
-
-},
-
-"domain": "test",
-
-"details": {
-
-"account_number": "0100000010",
-
-"account_name": null,
-
-"bank_code": "044",
-
-"bank_name": "Access Bank"
-
-},
 type DataInPaystackGeneralResponse struct {
 	AuthorizationUrl string                 `json:"authorization_url,omitempty"`
 	AccessCode       string                 `json:"access_code,omitempty"`
@@ -1336,49 +1312,49 @@ func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo stri
 	return nil, false, errors.InternalServerError("An unhandled error occurred")
 }
 
-func (s service) setBankDetails(ctx context.Context, email, bankName string, req SetBankDetailsRequest) error {
-	logger := s.logger.With(ctx, "account", email)
-
-	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
-	if !ok {
-		logger.Error("An error occurred while trying to verify the account number")
-		return err
-	}
-
-	_, _, ok = s.completedVerification(ctx, email)
-	if !ok {
-		logger.Error("Must verify email, phone and update profile before you continue")
-		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
-	}
-
-	acct, err := s.getAccountByEmail(ctx, email)
-	if err != nil {
-		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
-		return err
-	}
-	req.Type = "nuban"
-	req.Name = acct.Lastname + " " + acct.Firstname
-
-	b, err := json.Marshal(req)
-	if err != nil {
-		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
-		return err
-	}
-
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
-	urlToString := u.String()
-
-	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
-	request.Header.Add("Authorization", "Bearer "+s.PSec)
-	request.Header.Add("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		logger.Errorf("Error:", err)
-		return err
-	}
-
-}
+//func (s service) setBankDetails(ctx context.Context, email, bankName string, req SetBankDetailsRequest) error {
+//	logger := s.logger.With(ctx, "account", email)
+//
+//	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
+//	if !ok {
+//		logger.Error("An error occurred while trying to verify the account number")
+//		return err
+//	}
+//
+//	_, _, ok = s.completedVerification(ctx, email)
+//	if !ok {
+//		logger.Error("Must verify email, phone and update profile before you continue")
+//		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
+//	}
+//
+//	acct, err := s.getAccountByEmail(ctx, email)
+//	if err != nil {
+//		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
+//		return err
+//	}
+//	req.Type = "nuban"
+//	req.Name = acct.Lastname + " " + acct.Firstname
+//
+//	b, err := json.Marshal(req)
+//	if err != nil {
+//		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
+//		return err
+//	}
+//
+//	u, _ := url.ParseRequestURI(s.PaystackUrl)
+//	urlToString := u.String()
+//
+//	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
+//	request.Header.Add("Authorization", "Bearer "+s.PSec)
+//	request.Header.Add("Content-Type", "application/json")
+//
+//	resp, err := http.DefaultClient.Do(request)
+//	if err != nil {
+//		logger.Errorf("Error:", err)
+//		return err
+//	}
+//
+//}
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 

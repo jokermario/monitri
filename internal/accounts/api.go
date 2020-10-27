@@ -575,7 +575,7 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Details data   `json:"details"`
-		}{"failed", "not completed", data{mssg[0], mssg[1], mssg[2]}}, http.StatusOK)
+		}{"failed", "not completed", data{mssg[0].(string), mssg[1].(string), mssg[2].(string)}}, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

@@ -1318,58 +1318,58 @@ func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo stri
 	return nil, false, errors.InternalServerError("An unhandled error occurred")
 }
 
-func (s service) setBankDetails(ctx context.Context, email, bankName string, req SetBankDetailsRequest) error {
-	logger := s.logger.With(ctx, "account", email)
-
-	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
-	if !ok {
-		logger.Error("An error occurred while trying to verify the account number")
-		return err
-	}
-
-	_, _, ok = s.completedVerification(ctx, email)
-	if !ok {
-		logger.Error("Must verify email, phone and update profile before you continue")
-		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
-	}
-
-	acct, err := s.getAccountByEmail(ctx, email)
-	if err != nil {
-		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
-		return err
-	}
-	req.Type = "nuban"
-	req.Name = acct.Lastname + " " + acct.Firstname
-
-	b, err := json.Marshal(req)
-	if err != nil {
-		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
-		return err
-	}
-
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
-	urlToString := u.String()
-
-	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
-	request.Header.Add("Authorization", "Bearer "+s.PSec)
-	request.Header.Add("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		logger.Errorf("Error:", err)
-		return err
-	}
-	if resp.StatusCode == 200 {
-		data, _ := ioutil.ReadAll(resp.Body)
-		defer resp.Body.Close()
-
-		var responsePayload *PaystackGeneralResponse
-		_ = json.Unmarshal(data, &responsePayload)
-
-		acct.BankCode = responsePayload.Data.Details["bank_code"].(string)
-		acct.BankAccountNo = responsePayload.Data.Details["account_number"].(string)
-	}
-}
+//func (s service) setBankDetails(ctx context.Context, email, bankName string, req SetBankDetailsRequest) error {
+//	logger := s.logger.With(ctx, "account", email)
+//
+//	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
+//	if !ok {
+//		logger.Error("An error occurred while trying to verify the account number")
+//		return err
+//	}
+//
+//	_, _, ok = s.completedVerification(ctx, email)
+//	if !ok {
+//		logger.Error("Must verify email, phone and update profile before you continue")
+//		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
+//	}
+//
+//	acct, err := s.getAccountByEmail(ctx, email)
+//	if err != nil {
+//		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
+//		return err
+//	}
+//	req.Type = "nuban"
+//	req.Name = acct.Lastname + " " + acct.Firstname
+//
+//	b, err := json.Marshal(req)
+//	if err != nil {
+//		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
+//		return err
+//	}
+//
+//	u, _ := url.ParseRequestURI(s.PaystackUrl)
+//	urlToString := u.String()
+//
+//	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
+//	request.Header.Add("Authorization", "Bearer "+s.PSec)
+//	request.Header.Add("Content-Type", "application/json")
+//
+//	resp, err := http.DefaultClient.Do(request)
+//	if err != nil {
+//		logger.Errorf("Error:", err)
+//		return err
+//	}
+//	if resp.StatusCode == 200 {
+//		data, _ := ioutil.ReadAll(resp.Body)
+//		defer resp.Body.Close()
+//
+//		var responsePayload *PaystackGeneralResponse
+//		_ = json.Unmarshal(data, &responsePayload)
+//
+//		acct.BankCode = responsePayload.Data.Details["bank_code"].(string)
+//		acct.BankAccountNo = responsePayload.Data.Details["account_number"].(string)
+//	}
+//}
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 

@@ -1396,7 +1396,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 			return updateErr
 		}
 	}
-	return nil
+	return err
 }
 
 func (s service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {

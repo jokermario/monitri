@@ -60,12 +60,12 @@ type Service interface {
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
 	generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error
 	setupTOTP(ctx context.Context, email string) (string, []byte, error)
-	validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool
+	validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) (bool, error)
 	validateTOTP(ctx context.Context, passcode, secret string) bool
 	LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
 	loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
-	loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
-	set2FA(ctx context.Context, id, email, phone, Type string) error
+	//loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error)
+	set2FA(ctx context.Context, id, email string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
 	completedVerification(ctx context.Context, email string) (error, interface{}, bool)
@@ -77,6 +77,10 @@ type Service interface {
 	verifyOnPaystack(transRef string) bool
 	initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error)
 	getBanks(ctx context.Context) ([]byte, error)
+	verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error)
+	setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error
+	unset2FA(ctx context.Context, id, email, passcode, authType string) error
+	get2FAType(ctx context.Context, id string) (string, error)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -382,10 +386,6 @@ func (s service) login(ctx context.Context, req LoginRequest) (*TokenDetails, er
 			_ = s.generateAndSendEmailToken(ctx, req.Email, "login2fa")
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, "email2FA"
-		} else if settingsInfo.TwofaPhone == 1 {
-			_ = s.generateAndSendPhoneToken(ctx, identity.GetPhone(), "login2fa")
-			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "phone2FA"
 		} else {
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, ""
@@ -421,19 +421,19 @@ func (s service) loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRe
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
-	if err := req.validate(); err != nil {
-		return nil, err
-	}
-	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-		_, ok := s.verifyPhoneToken(ctx, identity.GetID(), req.Token, "login2fa")
-		if !ok {
-			return nil, errors.Unauthorized("")
-		}
-		return s.generateTokens(identity)
-	}
-	return nil, errors.Unauthorized("")
-}
+//func (s service) loginWithPhone2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+//	if err := req.validate(); err != nil {
+//		return nil, err
+//	}
+//	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
+//		_, ok := s.verifyPhoneToken(ctx, identity.GetID(), req.Token, "login2fa")
+//		if !ok {
+//			return nil, errors.Unauthorized("")
+//		}
+//		return s.generateTokens(identity)
+//	}
+//	return nil, errors.Unauthorized("")
+//}
 
 func (s service) completedVerification(ctx context.Context, email string) (error, interface{}, bool) {
 	logger := s.logger.With(ctx, "account", email)
@@ -573,7 +573,7 @@ func (s service) getAccountById(ctx context.Context, id string) (Account, error)
 	return Account{account}, err
 }
 
-func (s service) getSettingsById(ctx context.Context, id string) (Setting, error) {
+func (s service) getSettingsAccountById(ctx context.Context, id string) (Setting, error) {
 	settingsAccount, err := s.repo.GetSettingsById(ctx, id)
 	if err != nil {
 		return Setting{}, err
@@ -963,7 +963,6 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 		if i != acc.LoginEmailToken {
 			return nil, false
 		}
-		//fmt.Println("he")
 	}
 
 	if purpose == "verification" {
@@ -1096,92 +1095,96 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 	return nil, true
 }
 
-func (s service) set2FA(ctx context.Context, id, email, phone, Type string) error {
+func (s service) set2FA(ctx context.Context, id, email string) error {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
-		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
+		logger.Errorf("an error occurred while trying get account.\nThe error: %s", err)
 		return err
 	}
-	if Type == "phone" {
-		if acc.ConfirmedPhone != 1 {
-			logger.Errorf("phone number has not been verified\nThe error: %s, err")
-			return err
-		}
+	//if Type == "phone" {
+	//	if acc.ConfirmedPhone != 1 {
+	//		logger.Errorf("phone number has not been verified\nThe error: %s, err")
+	//		return err
+	//	}
+	//
+	//	setAcct, err := s.getSettingsAccountById(ctx, id)
+	//	if err != nil {
+	//		if err == sql.ErrNoRows {
+	//			if err := s.repo.CreateSettings(ctx, entity.Settings{
+	//				AccountId:  acc.Id,
+	//				TwofaPhone: 1,
+	//			}); err != nil {
+	//				logger.Errorf("could not insert into settings row\nThe error: %s", err)
+	//				return err
+	//			}
+	//		}
+	//		logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
+	//	} else {
+	//		setAcct.TwofaPhone = 1
+	//		err := s.repo.UpdateSettings(ctx, setAcct.Settings)
+	//		if err != nil {
+	//			logger.Errorf("an error occurred while trying to update settings phone ver. The error: %s", err)
+	//		}
+	//	}
+	//	t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+	//	var body bytes.Buffer
+	//	_ = t.Execute(&body, struct {
+	//		Message string
+	//	}{
+	//		Message: "2FA has been enabled on your mobile number: " + phone + ". \nThis would be active if google authenticator and email 2FA is not activated",
+	//	})
+	//	contentToString := string(body.Bytes())
+	//	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+	//	if sendmailErr != nil {
+	//		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+	//		return sendmailErr
+	//	}
+	//}
 
-		setAcct, err := s.getSettingsById(ctx, id)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				if err := s.repo.CreateSettings(ctx, entity.Settings{
-					AccountId:  acc.Id,
-					TwofaPhone: 1,
-				}); err != nil {
-					logger.Errorf("could not insert into settings row\nThe error: %s", err)
-					return err
-				}
-			}
-			logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
-		} else {
-			setAcct.TwofaPhone = 1
-			err := s.repo.UpdateSettings(ctx, setAcct.Settings)
-			if err != nil {
-				logger.Errorf("an error occurred while trying to update settings phone ver. The error: %s", err)
-			}
-		}
-		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
-		var body bytes.Buffer
-		_ = t.Execute(&body, struct {
-			Message string
-		}{
-			Message: "2FA has been enabled on your mobile number: " + phone + ". \nThis would be active if google authenticator and email 2FA is not activated",
-		})
-		contentToString := string(body.Bytes())
-		sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
-		if sendmailErr != nil {
-			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-			return sendmailErr
-		}
+	if acc.ConfirmedEmail != 1 {
+		logger.Errorf("email has not been verified\nThe error: %s", err)
+		return errors.InternalServerError("emailFaulty")
 	}
 
-	if Type == "email" {
-		if acc.ConfirmedEmail != 1 {
-			logger.Errorf("email has not been verified\nThe error: %s", err)
-			return errors.InternalServerError("emailFaulty")
-		}
-
-		setAcct, err := s.getSettingsById(ctx, id)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				if err := s.repo.CreateSettings(ctx, entity.Settings{
-					AccountId:  acc.Id,
-					TwofaEmail: 1,
-				}); err != nil {
-					logger.Errorf("could not insert into settings row\nThe error: %s", err)
-					return err
-				}
-			}
-			logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
-		} else {
-			setAcct.TwofaEmail = 1
-			err := s.repo.UpdateSettings(ctx, setAcct.Settings)
-			if err != nil {
-				logger.Errorf("an error occurred while trying to update settings email ver.The error: %s", err)
+	setAcct, err := s.getSettingsAccountById(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if err := s.repo.CreateSettings(ctx, entity.Settings{
+				AccountId:  acc.Id,
+				TwofaEmail: 1,
+			}); err != nil {
+				logger.Errorf("could not insert into settings row\nThe error: %s", err)
 				return err
 			}
 		}
-		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
-		var body bytes.Buffer
-		_ = t.Execute(&body, struct {
-			Message string
-		}{
-			Message: "2FA has been enabled on your email: " + email + ". \nThis would be active if google authenticator 2FA is not activated",
-		})
-		contentToString := string(body.Bytes())
-		sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
-		if sendmailErr != nil {
-			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-			return sendmailErr
+		logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
+	} else {
+
+		if setAcct.TwofaGoogleAuth == 1 {
+			logger.Errorf("Google auth has been set, unset to continue\nThe error: %s", err)
+			return errors.InternalServerError("GoogleAuthSet")
 		}
+
+		setAcct.TwofaEmail = 1
+		err := s.repo.UpdateSettings(ctx, setAcct.Settings)
+		if err != nil {
+			logger.Errorf("an error occurred while trying to update settings email ver.The error: %s", err)
+			return err
+		}
+	}
+	t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+	var body bytes.Buffer
+	_ = t.Execute(&body, struct {
+		Message string
+	}{
+		Message: "2FA has been enabled on your email: " + email + ".",
+	})
+	contentToString := string(body.Bytes())
+	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+	if sendmailErr != nil {
+		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+		return sendmailErr
 	}
 	return nil
 }
@@ -1204,7 +1207,7 @@ func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, e
 	return key.Secret(), buf.Bytes(), nil
 }
 
-func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) bool {
+func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) (bool, error) {
 	logger := s.logger.With(ctx, "account", id)
 	acc, err := s.getAccountById(ctx, id)
 	if err != nil {
@@ -1213,11 +1216,11 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	ok := totp.Validate(passcode, secret)
 	if !ok {
 		logger.Errorf("passcode=%s\n secret=%s", passcode, secret)
-		return false
+		return false, nil
 	}
 	acc.TotpSecret = secret
 	acc.UpdatedAt = time.Now()
-	setAcct, err := s.getSettingsById(ctx, id)
+	setAcct, err := s.getSettingsAccountById(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, entity.Settings{
@@ -1225,15 +1228,21 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 				TwofaGoogleAuth: 1,
 			}, "insert"); errr != nil {
 				logger.Errorf("an error occurred while trying to update totp secret for the acc. The error: %s", errr)
-				return false
+				return false, nil
 			}
 		}
 		logger.Errorf("an error occurred while trying to get settings\nThe error: %s", err)
 	} else {
+
+		if setAcct.TwofaEmail == 1 {
+			logger.Errorf("Email has been set as the 2FA, unset to continue\nThe error: %s", err)
+			return false, errors.InternalServerError("EmailAuthSet")
+		}
+
 		setAcct.TwofaGoogleAuth = 1
 		if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, setAcct.Settings, "update"); errr != nil {
 			logger.Errorf("an error occurred while trying to update settings email ver.The error: %s", errr)
-			return false
+			return false, nil
 		}
 	}
 
@@ -1248,9 +1257,9 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
 	if sendmailErr != nil {
 		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
 func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool {
@@ -1313,58 +1322,180 @@ func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo stri
 	return nil, false, errors.InternalServerError("An unhandled error occurred")
 }
 
-//func (s service) setBankDetails(ctx context.Context, email, bankName string, req SetBankDetailsRequest) error {
-//	logger := s.logger.With(ctx, "account", email)
-//
-//	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
-//	if !ok {
-//		logger.Error("An error occurred while trying to verify the account number")
-//		return err
-//	}
-//
-//	_, _, ok = s.completedVerification(ctx, email)
-//	if !ok {
-//		logger.Error("Must verify email, phone and update profile before you continue")
-//		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
-//	}
-//
-//	acct, err := s.getAccountByEmail(ctx, email)
-//	if err != nil {
-//		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
-//		return err
-//	}
-//	req.Type = "nuban"
-//	req.Name = acct.Lastname + " " + acct.Firstname
-//
-//	b, err := json.Marshal(req)
-//	if err != nil {
-//		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
-//		return err
-//	}
-//
-//	u, _ := url.ParseRequestURI(s.PaystackUrl)
-//	urlToString := u.String()
-//
-//	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
-//	request.Header.Add("Authorization", "Bearer "+s.PSec)
-//	request.Header.Add("Content-Type", "application/json")
-//
-//	resp, err := http.DefaultClient.Do(request)
-//	if err != nil {
-//		logger.Errorf("Error:", err)
-//		return err
-//	}
-//	if resp.StatusCode == 200 {
-//		data, _ := ioutil.ReadAll(resp.Body)
-//		defer resp.Body.Close()
-//
-//		var responsePayload *PaystackGeneralResponse
-//		_ = json.Unmarshal(data, &responsePayload)
-//
-//		acct.BankCode = responsePayload.Data.Details["bank_code"].(string)
-//		acct.BankAccountNo = responsePayload.Data.Details["account_number"].(string)
-//	}
-//}
+func (s service) setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error {
+	logger := s.logger.With(ctx, "account", email)
+
+	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
+	if !ok {
+		logger.Error("An error occurred while trying to verify the account number")
+		return err
+	}
+
+	_, _, ok = s.completedVerification(ctx, email)
+	if !ok {
+		logger.Error("Must verify email, phone and update profile before you continue")
+		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
+	}
+
+	acct, err := s.getAccountByEmail(ctx, email)
+	if err != nil {
+		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
+		return err
+	}
+
+	if authType == "mobile2fa" {
+		if ok := totp.Validate(passcode, acct.TotpSecret); !ok {
+			logger.Errorf("passcode does not match.\nThe error: %s", err)
+			return errors.InternalServerError("passcodeErr")
+		}
+	}
+
+	if authType == "email2fa" {
+		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
+		if !ok {
+			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
+			return err
+		}
+	}
+
+	req.Type = "nuban"
+	req.Name = acct.Lastname + " " + acct.Firstname
+
+	b, err := json.Marshal(req)
+	if err != nil {
+		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
+		return err
+	}
+
+	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	urlToString := u.String()
+
+	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
+	request.Header.Add("Authorization", "Bearer "+s.PSec)
+	request.Header.Add("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		logger.Errorf("Error:", err)
+		return err
+	}
+	if resp.StatusCode == 200 {
+		data, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+
+		var responsePayload *PaystackGeneralResponse
+		_ = json.Unmarshal(data, &responsePayload)
+
+		acct.BankCode = responsePayload.Data.Details["bank_code"].(string)
+		acct.BankAccountNo = responsePayload.Data.Details["account_number"].(string)
+		acct.BankName = responsePayload.Data.Details["bank_name"].(string)
+		acct.RecipientCode = responsePayload.Data.RecipientCode
+
+		updateErr := s.repo.AccountUpdate(ctx, acct.Accounts)
+		if updateErr != nil {
+			logger.Errorf("An error occurred while trying to update the user account. The error is: %s", updateErr)
+			return updateErr
+		}
+	}
+	return nil
+}
+
+func (s service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {
+	logger := s.logger.With(ctx, "account", id)
+	acc, err := s.getAccountById(ctx, id)
+	if err != nil {
+		logger.Errorf("an error occurred while trying get account.\nThe error: %s", err)
+		return err
+	}
+	if authType == "mobile2fa" {
+		setAcct, err := s.getSettingsAccountById(ctx, id)
+		if err != nil {
+			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)
+			return errors.InternalServerError("settingsNotExist")
+		}
+		secret := acc.TotpSecret
+		ok := totp.Validate(passcode, secret)
+		if !ok {
+			logger.Errorf("passcode does not match.\nThe error: %s", err)
+			return errors.InternalServerError("passcodeErr")
+		}
+
+		setAcct.TwofaGoogleAuth = 0
+		err = s.repo.UpdateSettings(ctx, setAcct.Settings)
+		if err != nil {
+			logger.Errorf("an error occurred while trying to update settings googleAuth ver.The error: %s", err)
+			return err
+		}
+		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Message string
+		}{
+			Message: "You have disabled Google Auth 2FA on your account:" + email + ".",
+		})
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(email, "2FA De-activation Authorised", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
+		return nil
+	}
+
+	if authType == "email2fa" {
+		setAcct, err := s.getSettingsAccountById(ctx, id)
+		if err != nil {
+			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)
+			return errors.InternalServerError("settingsNotExist")
+		}
+
+		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
+		if !ok {
+			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
+			return err
+		}
+
+		setAcct.TwofaEmail = 0
+		err = s.repo.UpdateSettings(ctx, setAcct.Settings)
+		if err != nil {
+			logger.Errorf("an error occurred while trying to update settings googleAuth ver.The error: %s", err)
+			return err
+		}
+		t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
+		var body bytes.Buffer
+		_ = t.Execute(&body, struct {
+			Message string
+		}{
+			Message: "You have disabled 2FA on your account email:" + email + ".",
+		})
+		contentToString := string(body.Bytes())
+		sendmailErr := s.emailService.SendEmail(email, "2FA De-activation Authorised", contentToString)
+		if sendmailErr != nil {
+			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+			return sendmailErr
+		}
+		return nil
+	}
+	return nil
+}
+
+func (s service) get2FAType(ctx context.Context, id string) (string, error) {
+	logger := s.logger.With(ctx, "account", id)
+	sett, err := s.getSettingsAccountById(ctx, id)
+	if err != nil {
+		logger.Errorf("An error occurred while trying to retrieve the setting s for the account. The error: %s", err)
+		return "", err
+	}
+
+	if sett.TwofaGoogleAuth == 1 {
+		return "Google2FAAuth", nil
+	}
+
+	if sett.TwofaEmail == 1 {
+		return "Email2FAAuth", nil
+	}
+	return "", nil
+}
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 

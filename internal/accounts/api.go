@@ -27,7 +27,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/generate/token", res.login(logger))
 	r.Post("/generate/mobile2fa/token", res.LoginWithMobile2FA(logger))
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
-	r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
+	//r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
 	r.Post("/new/account", res.createAccount(logger))
 	r.Post("/transaction/webhook", res.paystackWebhookForTransaction(logger))
 
@@ -42,7 +42,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Delete("/account/delete", res.deleteById)
 	r.Post("/account/logout", res.logout)
 	r.Post("/refresh/token", res.refreshToken)
-	r.Post("/account/email/token", res.sendEmailVeriToken)
+	r.Post("/account/email/token/<purpose>", res.sendEmailVeriToken)
 	r.Post("/account/phone/token", res.sendPhoneVeriToken)
 	r.Post("/account/verify/email/<token>/<purpose>", res.verifyEmailToken)
 	r.Post("/account/verify/phone/<token>/<purpose>", res.verifyPhoneToken)
@@ -50,8 +50,13 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/auth/totp/setup", res.setupTOTP)
 	r.Post("/account/auth/totp/initial/validate/<secret>/<passcode>", res.validateTOTPFirstTime)
 	r.Post("/account/auth/totp/validate/<passcode>", res.validateTOTP)
-	r.Post("/account/auth/setup2fa/<type>", res.setup2FA)
+	r.Post("/account/auth/setup2fa/email", res.setup2FA)
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
+	r.Post("/list/banks", res.getNigerianBanks)
+	r.Post("/verify/bankaccount/<bankCode>/<acctNo>", res.verifyBankAccountNumber)
+	r.Post("/get/2fatype", res.get2FAType)
+	r.Post("/account/unset2fa/<passcode>/<authType>", res.unset2FA)
+	r.Post("/account/bankdetails/<passcode>/<authType>", res.setBankDetails)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("/transaction/initialize", res.initiatedTransaction)
@@ -65,6 +70,110 @@ type resource struct {
 
 func (r resource) healthCheck(rc *routing.Context) error {
 	return rc.WriteWithStatus("Live", http.StatusOK)
+}
+
+func (r resource) getNigerianBanks(rc *routing.Context) error {
+	b, err := r.service.getBanks(rc.Request.Context())
+	if err != nil {
+		return errors.InternalServerError("An error occurred")
+	}
+	type responseData struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data    []struct {
+			Name      string      `json:"name,omitempty"`
+			Slug      string      `json:"slug,omitempty"`
+			Code      string      `json:"code,omitempty"`
+			Longcode  string      `json:"longcode,omitempty"`
+			Gateway   string      `json:"-"`
+			Active    bool        `json:"active,omitempty"`
+			IsDeleted interface{} `json:"-"`
+			Id        int         `json:"-"`
+			CreatedAt string      `json:"-"`
+			UpdatedAt string      `json:"-"`
+		} `json:"data"`
+	}
+	var data *responseData
+	_ = json.Unmarshal(b, &data)
+	return rc.WriteWithStatus(data, http.StatusOK)
+}
+
+func (r resource) verifyBankAccountNumber(rc *routing.Context) error {
+	b, _, err := r.service.verifyBankAcctNo(rc.Request.Context(), rc.Param("bankCode"), rc.Param("acctNo"))
+	if err != nil {
+		return errors.InternalServerError("An error occurred")
+	}
+	type responseData struct {
+		Status  bool   `json:"status"`
+		Message string `json:"message"`
+		Data    struct {
+			AccountNumber string `json:"account_number,omitempty"`
+			AccountName   string `json:"account_name,omitempty"`
+		} `json:"data"`
+	}
+	var data *responseData
+	_ = json.Unmarshal(b, &data)
+	return rc.WriteWithStatus(data, http.StatusOK)
+}
+
+func (r resource) get2FAType(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	authType, err := r.service.get2FAType(rc.Request.Context(), identity.GetID())
+	if err != nil {
+		return errors.InternalServerError("An error occurred")
+	}
+	type data struct {
+		AuthType string `json:"auth_type"`
+	}
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data    data   `json:"data"`
+	}{
+		"success",
+		"The auth type has been retrieved",
+		data{
+			authType,
+		},
+	}, http.StatusOK)
+}
+
+func (r resource) unset2FA(rc *routing.Context) error {
+	identity := CurrentAccount(rc.Request.Context())
+	err := r.service.unset2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"))
+	if err != nil {
+		return errors.InternalServerError("An error occurred")
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{
+		"success",
+		"The 2FA has been unset successfully",
+	}, http.StatusOK)
+}
+
+func (r resource) setBankDetails(rc *routing.Context) error {
+	var input SetBankDetailsRequest
+
+	if err := rc.Read(&input); err != nil {
+		return errors.BadRequest("invalid request. Cannot read the body")
+	}
+
+	identity := CurrentAccount(rc.Request.Context())
+	err := r.service.setBankDetails(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"), input)
+	if err != nil {
+		return errors.InternalServerError("An error occurred")
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{
+		"success",
+		"Bank details have been set successfully",
+	}, http.StatusOK)
 }
 
 //-------------------------------------------------------ACCOUNT--------------------------------------------------------
@@ -248,64 +357,64 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 	}
 }
 
-func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
-	return func(c *routing.Context) error {
-		logger := logger.With(c.Request.Context())
-		var req AdditionalSecLoginRequest
-
-		if err := c.Read(&req); err != nil {
-			logger.Errorf("invalid request: %v", err)
-			return errors.BadRequest("")
-		}
-		TokenDetails, loginErr := r.service.loginWithPhone2FA(c.Request.Context(), req)
-		if loginErr != nil {
-			logger.Errorf("invalid request: %v", loginErr)
-			return loginErr
-		}
-		//encrypt access and refresh token
-		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
-		if err != nil {
-			return errors.InternalServerError("")
-		}
-		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
-		if err != nil {
-			return errors.InternalServerError("")
-		}
-
-		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
-		if redisErr != nil {
-			return redisErr
-		}
-		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-		if err != nil {
-			return errors.InternalServerError("")
-		}
-		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
-
-		err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
-		var vComp string
-		if mssg != nil && err != nil {
-			vComp = "no"
-		} else {
-			vComp = "yes"
-		}
-
-		type data struct {
-			//TokenType    string `json:"token_type"`
-			Email                 string `json:"email"`
-			CompletedVerification string `json:"completed_verification"`
-			AccessToken           string `json:"access_token"`
-			ExpiryTime            int64  `json:"expires"`
-			RefreshToken          string `json:"refresh_token"`
-		}
-		return c.Write(struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
-			hex.EncodeToString(encRefreshToken)}})
-	}
-}
+//func (r resource) LoginWithPhone2FA(logger log.Logger) routing.Handler {
+//	return func(c *routing.Context) error {
+//		logger := logger.With(c.Request.Context())
+//		var req AdditionalSecLoginRequest
+//
+//		if err := c.Read(&req); err != nil {
+//			logger.Errorf("invalid request: %v", err)
+//			return errors.BadRequest("")
+//		}
+//		TokenDetails, loginErr := r.service.loginWithPhone2FA(c.Request.Context(), req)
+//		if loginErr != nil {
+//			logger.Errorf("invalid request: %v", loginErr)
+//			return loginErr
+//		}
+//		//encrypt access and refresh token
+//		encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
+//		if err != nil {
+//			return errors.InternalServerError("")
+//		}
+//		encRefreshToken, err := r.service.aesEncrypt(TokenDetails.RefreshToken)
+//		if err != nil {
+//			return errors.InternalServerError("")
+//		}
+//
+//		redisErr := r.service.storeAuthKeys(r.redisConn, req.Email, TokenDetails)
+//		if redisErr != nil {
+//			return redisErr
+//		}
+//		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+//		if err != nil {
+//			return errors.InternalServerError("")
+//		}
+//		r.service.sendLoginNotifEmail(c.Request.Context(), req.Email, time.Now().Format(time.RFC3339), ip, c.Request.UserAgent())
+//
+//		err, mssg, _ := r.service.completedVerification(c.Request.Context(), req.Email)
+//		var vComp string
+//		if mssg != nil && err != nil {
+//			vComp = "no"
+//		} else {
+//			vComp = "yes"
+//		}
+//
+//		type data struct {
+//			//TokenType    string `json:"token_type"`
+//			Email                 string `json:"email"`
+//			CompletedVerification string `json:"completed_verification"`
+//			AccessToken           string `json:"access_token"`
+//			ExpiryTime            int64  `json:"expires"`
+//			RefreshToken          string `json:"refresh_token"`
+//		}
+//		return c.Write(struct {
+//			Status  string `json:"status"`
+//			Message string `json:"message"`
+//			Data    data   `json:"data,omitempty"`
+//		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+//			hex.EncodeToString(encRefreshToken)}})
+//	}
+//}
 
 func (r resource) createAccount(logger log.Logger) routing.Handler {
 	return func(context *routing.Context) error {
@@ -436,11 +545,11 @@ func (r resource) refreshToken(rc *routing.Context) error {
 
 	type data struct {
 		//TokenType    string `json:"token_type"`
-		Email        string `json:"email"`
+		Email                 string `json:"email"`
 		CompletedVerification string `json:"completed_verification"`
-		AccessToken  string `json:"access_token"`
-		ExpiryTime   int64  `json:"expires"`
-		RefreshToken string `json:"refresh_token"`
+		AccessToken           string `json:"access_token"`
+		ExpiryTime            int64  `json:"expires"`
+		RefreshToken          string `json:"refresh_token"`
 	}
 	return rc.Write(struct {
 		Status  string `json:"status"`
@@ -452,7 +561,7 @@ func (r resource) refreshToken(rc *routing.Context) error {
 
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.generateAndSendEmailToken(rc.Request.Context(), identity.GetEmail(), "verification")
+	err := r.service.generateAndSendEmailToken(rc.Request.Context(), identity.GetEmail(), rc.Param("purpose"))
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}
@@ -536,8 +645,12 @@ func (r resource) setupTOTP(rc *routing.Context) error {
 
 func (r resource) validateTOTPFirstTime(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	if ok := r.service.validateTOTPFirstTime(rc.Request.Context(), identity.GetID(), identity.GetEmail(),
-		rc.Param("passcode"), rc.Param("secret")); !ok {
+	ok, err := r.service.validateTOTPFirstTime(rc.Request.Context(), identity.GetID(), identity.GetEmail(),
+		rc.Param("passcode"), rc.Param("secret"))
+	if !ok {
+		if err == errors.InternalServerError("EmailAuthSet") {
+			return errors.InternalServerError("Email has been set as the 2FA, unset to continue")
+		}
 		return errors.InternalServerError("an error occurred while validating totp for the first time")
 	}
 	return rc.WriteWithStatus(struct {
@@ -559,10 +672,13 @@ func (r resource) validateTOTP(rc *routing.Context) error {
 
 func (r resource) setup2FA(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.set2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), identity.GetPhone(), strings.ToLower(rc.Param("type")))
+	err := r.service.set2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail())
 	if err != nil {
 		if err == errors.InternalServerError("emailFaulty") {
 			return errors.InternalServerError("email is not verified")
+		}
+		if err == errors.InternalServerError("GoogleAuthSet") {
+			return errors.InternalServerError("Google auth has been set, unset to continue")
 		}
 		return errors.InternalServerError("an error occurred while verifying the token")
 	}
@@ -578,10 +694,10 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	if mssg != nil && err != nil {
 
 		return rc.WriteWithStatus(struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-			Details interface{}   `json:"details"`
-		}{"failed", "not completed", mssg }, http.StatusOK)
+			Status  string      `json:"status"`
+			Message string      `json:"message"`
+			Details interface{} `json:"details"`
+		}{"failed", "not completed", mssg}, http.StatusOK)
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`
@@ -592,7 +708,7 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
 func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handler {
-	return func (rc *routing.Context) error {
+	return func(rc *routing.Context) error {
 		logger := logger.With(rc.Request.Context(), "requestIpLoc", rc.Request.RemoteAddr)
 		if rc.Request.Method != http.MethodPost {
 			logger.Error("http method error")
@@ -676,7 +792,7 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 
 	type dataToReturn struct {
-		Status  bool `json:"status"`
+		Status  bool   `json:"status"`
 		Message string `json:"message"`
 		Data    struct {
 			AuthorizationUrl string `json:"authorization_url,omitempty"`

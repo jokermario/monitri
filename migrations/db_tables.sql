@@ -72,7 +72,6 @@ CREATE TABLE IF NOT EXISTS settings
                                 id VARCHAR(50) UNIQUE NOT NULL PRIMARY KEY,
                                 account_id VARCHAR(50) UNIQUE NOT NULL,
                                 twoFA_email INTEGER NOT NULL DEFAULT 0,
-                                twoFA_phone INTEGER NOT NULL DEFAULT 0,
                                 twoFA_google_auth INTEGER NOT NULL DEFAULT 0,
                                 locked_wallets TEXT NULL,
                                 anti_phishing_token VARCHAR(50) NULL

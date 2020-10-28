@@ -1378,6 +1378,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 	if resp.StatusCode == 200 {
+		fmt.Println("success")
 		data, _ := ioutil.ReadAll(resp.Body)
 		defer resp.Body.Close()
 

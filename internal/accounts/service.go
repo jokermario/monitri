@@ -1341,14 +1341,14 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 
-	if authType == "mobile2fa" {
+	if authType == "Google2FAAuth" {
 		if ok := totp.Validate(passcode, acct.TotpSecret); !ok {
 			logger.Errorf("passcode does not match.\nThe error: %s", err)
 			return errors.InternalServerError("passcodeErr")
 		}
 	}
 
-	if authType == "email2fa" {
+	if authType == "Email2FAAuth" {
 		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)

@@ -1403,7 +1403,7 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 		logger.Errorf("an error occurred while trying get account.\nThe error: %s", err)
 		return err
 	}
-	if authType == "mobile2fa" {
+	if authType == "Google2FAAuth" {
 		setAcct, err := s.getSettingsAccountById(ctx, id)
 		if err != nil {
 			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)
@@ -1438,7 +1438,7 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 		return nil
 	}
 
-	if authType == "email2fa" {
+	if authType == "Email2FAAuth" {
 		setAcct, err := s.getSettingsAccountById(ctx, id)
 		if err != nil {
 			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)

@@ -120,7 +120,17 @@ func (r resource) get2FAType(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	authType, err := r.service.get2FAType(rc.Request.Context(), identity.GetID())
 	if err != nil {
-		return errors.InternalServerError("An error occurred")
+		if err == errors.InternalServerError("2FANotSet"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"No 2FA has been set for this account",
+			}, http.StatusInternalServerError)
+		}else {
+			return errors.InternalServerError("An error occurred")
+		}
 	}
 	type data struct {
 		AuthType string `json:"auth_type"`

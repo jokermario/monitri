@@ -1148,9 +1148,11 @@ func (s service) set2FA(ctx context.Context, id, email string) error {
 	}
 
 	setAcct, err := s.getSettingsAccountById(ctx, id)
+	pid := entity.GenerateID()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if err := s.repo.CreateSettings(ctx, entity.Settings{
+				Id:         pid,
 				AccountId:  acc.Id,
 				TwofaEmail: 1,
 			}); err != nil {
@@ -1481,7 +1483,7 @@ func (s service) get2FAType(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return "", errors.InternalServerError("2FANotSet")
-		}else{
+		} else {
 			logger.Errorf("An error occurred while trying to retrieve the setting s for the account. The error: %s", err)
 			return "", err
 		}

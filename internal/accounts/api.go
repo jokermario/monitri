@@ -168,6 +168,14 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"The passcode is not valid",
 			}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("TokenInvalid") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"The token is invalid",
+			}, http.StatusInternalServerError)
 		}else {
 			return errors.InternalServerError("An error occurred")
 		}
@@ -192,7 +200,33 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.setBankDetails(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"), input)
 	if err != nil {
-		return errors.InternalServerError("An error occurred")
+		if err == errors.InternalServerError("settingsNotExist"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"2FA has not been set",
+			}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("passcodeErr"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"The passcode is not valid",
+			}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("TokenInvalid") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"The token is invalid",
+			}, http.StatusInternalServerError)
+		}else {
+			return errors.InternalServerError("An error occurred")
+		}
 	}
 
 	return rc.WriteWithStatus(struct {

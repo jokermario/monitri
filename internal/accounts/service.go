@@ -1350,7 +1350,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
-			return err
+			return errors.InternalServerError("TokenInvalid")
 		}
 	}
 
@@ -1448,7 +1448,7 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
-			return err
+			return errors.InternalServerError("TokenInvalid")
 		}
 
 		setAcct.TwofaEmail = 0

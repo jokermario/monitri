@@ -1297,14 +1297,10 @@ func (s service) getBanks(ctx context.Context) ([]byte, error) {
 func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error) {
 	logger := s.logger.With(ctx)
 
-	data := url.Values{}
-	data.Set("account_number", bankAcctNo)
-	data.Set("bank_code", bankCode)
-
 	u, _ := url.ParseRequestURI(s.PaystackUrl)
 	urlToString := u.String()
 
-	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank/resolve", strings.NewReader(data.Encode()))
+	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank/resolve?account_number="+bankAcctNo+"&bank_code="+bankCode, nil)
 	request.Header.Add("Authorization", "Bearer "+s.PSec)
 
 	resp, err := http.DefaultClient.Do(request)

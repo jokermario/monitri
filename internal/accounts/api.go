@@ -152,7 +152,25 @@ func (r resource) unset2FA(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.unset2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"))
 	if err != nil {
-		return errors.InternalServerError("An error occurred")
+		if err == errors.InternalServerError("settingsNotExist"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"2FA has not been set",
+			}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("passcodeErr"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"The passcode is not valid",
+			}, http.StatusInternalServerError)
+		}else {
+			return errors.InternalServerError("An error occurred")
+		}
 	}
 
 	return rc.WriteWithStatus(struct {

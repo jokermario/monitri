@@ -1479,8 +1479,12 @@ func (s service) get2FAType(ctx context.Context, id string) (string, error) {
 	logger := s.logger.With(ctx, "account", id)
 	sett, err := s.getSettingsAccountById(ctx, id)
 	if err != nil {
-		logger.Errorf("An error occurred while trying to retrieve the setting s for the account. The error: %s", err)
-		return "", err
+		if err == sql.ErrNoRows {
+			return "", errors.InternalServerError("2FANotSet")
+		}else{
+			logger.Errorf("An error occurred while trying to retrieve the setting s for the account. The error: %s", err)
+			return "", err
+		}
 	}
 
 	if sett.TwofaGoogleAuth == 1 {

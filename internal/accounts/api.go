@@ -627,7 +627,7 @@ func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 		return errors.BadRequest("invalid request. Cannot read the request")
 	}
 
-	err := r.service.generateAndSendEmailToken(rc.Request.Context(), req.Email, rc.Param("purpose"))
+	err := r.service.generateAndSendEmailToken(rc.Request.Context(), req, rc.Param("purpose"))
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}

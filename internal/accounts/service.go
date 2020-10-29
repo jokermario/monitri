@@ -54,7 +54,7 @@ type Service interface {
 	generateTokens(identity Identity) (*TokenDetails, error)
 	getAccountIdEmailPhone(ctx context.Context, id string) Identity
 	refreshToken(identity Identity, redisConn redis.Conn, key string, tokenDetails *TokenDetails) (*TokenDetails, error)
-	generateAndSendEmailToken(ctx context.Context, email, password, purpose string) error
+	generateAndSendEmailToken(ctx context.Context, req LoginRequest, purpose string) error
 	verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool)
 	verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
@@ -383,7 +383,7 @@ func (s service) login(ctx context.Context, req LoginRequest) (*TokenDetails, er
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, "mobile2FA"
 		} else if settingsInfo.TwofaEmail == 1 {
-			_ = s.generateAndSendEmailToken(ctx, req.Email, req.Password, "login2fa")
+			_ = s.generateAndSendEmailToken(ctx, req, "login2fa")
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, "email2FA"
 		} else {
@@ -877,9 +877,12 @@ func (s service) generateRefreshToken(identity Identity, tokenUUID string, expir
 	}).SignedString([]byte(s.RefreshTokenSigningKey))
 }
 
-func (s service) generateAndSendEmailToken(ctx context.Context, email, password, purpose string) error {
-	logger := s.logger.With(ctx, "account", email)
-	if identity := s.authenticate(ctx, email, password); identity != nil {
+func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest, purpose string) error {
+	logger := s.logger.With(ctx, "account", req.Email)
+	if err := req.validate(); err != nil {
+		return err
+	}
+	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
 		RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 		if purpose == "login2fa" {
 			t, _ := template.ParseFiles("internal/email/email2FANotificationEmailTemplate.gohtml")
@@ -889,7 +892,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, email, password,
 			}{
 				Token: RandomCrypto,
 			})
-			account, err := s.getAccountByEmail(ctx, email)
+			account, err := s.getAccountByEmail(ctx, req.Email)
 			if err != nil {
 				logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
 				return err
@@ -904,7 +907,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, email, password,
 				return updateErr
 			}
 			contentToString := string(body.Bytes())
-			sendmailErr := s.emailService.SendEmail(email, "2FA login Token", contentToString)
+			sendmailErr := s.emailService.SendEmail(req.Email, "2FA login Token", contentToString)
 			if sendmailErr != nil {
 				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
 				return sendmailErr
@@ -919,7 +922,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, email, password,
 			}{
 				Token: RandomCrypto,
 			})
-			account, err := s.getAccountByEmail(ctx, email)
+			account, err := s.getAccountByEmail(ctx, req.Email)
 			if err != nil {
 				logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
 				return err
@@ -934,7 +937,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, email, password,
 				return updateErr
 			}
 			contentToString := string(body.Bytes())
-			sendmailErr := s.emailService.SendEmail(email, "Confirm email address", contentToString)
+			sendmailErr := s.emailService.SendEmail(req.Email, "Confirm email address", contentToString)
 			if sendmailErr != nil {
 				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
 				return sendmailErr

@@ -54,7 +54,7 @@ type Service interface {
 	generateTokens(identity Identity) (*TokenDetails, error)
 	getAccountIdEmailPhone(ctx context.Context, id string) Identity
 	refreshToken(identity Identity, redisConn redis.Conn, key string, tokenDetails *TokenDetails) (*TokenDetails, error)
-	generateAndSendEmailToken(ctx context.Context, receiverEmail, purpose string) error
+	generateAndSendEmailToken(ctx context.Context, email, password, purpose string) error
 	verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool)
 	verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)

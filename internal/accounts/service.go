@@ -454,9 +454,6 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 		errstrings["profile"] = "profile not updated"
 	}
 
-	fmt.Println(len(errstrings))
-	fmt.Println(errstrings)
-
 	if errstrings["email"] != nil || errstrings["phone"] != nil || errstrings["profile"] != nil {
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue"), errstrings, false
 	} else {
@@ -1396,7 +1393,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 	fmt.Println(resp.StatusCode)
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == 201 {
 		fmt.Println("success")
 		data, _ := ioutil.ReadAll(resp.Body)
 		defer resp.Body.Close()

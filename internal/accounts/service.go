@@ -1323,25 +1323,31 @@ func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo stri
 func (s service) setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error {
 	logger := s.logger.With(ctx, "account", email)
 
+	fmt.Println(req.BankCode)
+	fmt.Println(req.AccountNumber)
+
 	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
 	if !ok {
 		logger.Error("An error occurred while trying to verify the account number")
 		return err
 	}
-
+	fmt.Println("bankAcctVerified")
 	_, _, ok = s.completedVerification(ctx, email)
 	if !ok {
 		logger.Error("Must verify email, phone and update profile before you continue")
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
+	fmt.Println("completedVerification")
 
 	acct, err := s.getAccountByEmail(ctx, email)
 	if err != nil {
 		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
 		return err
 	}
+	fmt.Println("gottenAcctByEmail")
 
 	if authType == "Google2FAAuth" {
+		fmt.Println("Google2FAAuth")
 		if ok := totp.Validate(passcode, acct.TotpSecret); !ok {
 			logger.Errorf("passcode does not match.\nThe error: %s", err)
 			return errors.InternalServerError("passcodeErr")
@@ -1349,6 +1355,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 	}
 
 	if authType == "Email2FAAuth" {
+		fmt.Println("Email2FAAuth")
 		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
@@ -1364,9 +1371,13 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
 		return err
 	}
+	fmt.Println(req)
+	fmt.Println(string(b))
 
 	u, _ := url.ParseRequestURI(s.PaystackUrl)
 	urlToString := u.String()
+
+	fmt.Println(urlToString+"/transferrecipient")
 
 	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
 	request.Header.Add("Authorization", "Bearer "+s.PSec)
@@ -1377,6 +1388,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		logger.Errorf("Error:", err)
 		return err
 	}
+	fmt.Println(resp.StatusCode)
 	if resp.StatusCode == 200 {
 		fmt.Println("success")
 		data, _ := ioutil.ReadAll(resp.Body)
@@ -1396,7 +1408,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 			return updateErr
 		}
 	}
-	return err
+	return nil
 }
 
 func (s service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {

@@ -943,6 +943,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest
 				return sendmailErr
 			}
 		}
+		return nil
 	}
 
 	return errors.Unauthorized("")

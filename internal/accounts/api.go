@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
-	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -629,9 +628,12 @@ func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 	}
 
 	err := r.service.generateAndSendEmailToken(rc.Request.Context(), req, rc.Param("purpose"))
-	fmt.Println(err)
 	if err != nil {
-		return errors.InternalServerError("an error occurred while generating and sending token")
+		if err == errors.Unauthorized("") {
+			return errors.Unauthorized("")
+		}else {
+			return errors.InternalServerError("an error occurred while generating and sending token")
+		}
 	}
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`

@@ -383,7 +383,7 @@ func (s service) login(ctx context.Context, req LoginRequest) (*TokenDetails, er
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, "mobile2FA"
 		} else if settingsInfo.TwofaEmail == 1 {
-			_ = s.generateAndSendEmailToken(ctx, req.Email, "login2fa")
+			_ = s.generateAndSendEmailToken(ctx, req.Email, req.Password, "login2fa")
 			TokenDetails, err := s.generateTokens(identity)
 			return TokenDetails, err, "email2FA"
 		} else {
@@ -877,69 +877,72 @@ func (s service) generateRefreshToken(identity Identity, tokenUUID string, expir
 	}).SignedString([]byte(s.RefreshTokenSigningKey))
 }
 
-func (s service) generateAndSendEmailToken(ctx context.Context, receiverEmail, purpose string) error {
-	logger := s.logger.With(ctx, "account", receiverEmail)
-	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
-	if purpose == "login2fa" {
-		t, _ := template.ParseFiles("internal/email/email2FANotificationEmailTemplate.gohtml")
-		var body bytes.Buffer
-		_ = t.Execute(&body, struct {
-			Token *big.Int
-		}{
-			Token: RandomCrypto,
-		})
-		account, err := s.getAccountByEmail(ctx, receiverEmail)
-		if err != nil {
-			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
-			return err
-		}
-		account.LoginEmailToken = int(RandomCrypto.Int64())
-		account.LoginEmailExpiry = time.Now().Add(time.Duration(5) * time.Minute).Unix()
+func (s service) generateAndSendEmailToken(ctx context.Context, email, password, purpose string) error {
+	logger := s.logger.With(ctx, "account", email)
+	if identity := s.authenticate(ctx, email, password); identity != nil {
+		RandomCrypto, _ := rand.Prime(rand.Reader, 20)
+		if purpose == "login2fa" {
+			t, _ := template.ParseFiles("internal/email/email2FANotificationEmailTemplate.gohtml")
+			var body bytes.Buffer
+			_ = t.Execute(&body, struct {
+				Token *big.Int
+			}{
+				Token: RandomCrypto,
+			})
+			account, err := s.getAccountByEmail(ctx, email)
+			if err != nil {
+				logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
+				return err
+			}
+			account.LoginEmailToken = int(RandomCrypto.Int64())
+			account.LoginEmailExpiry = time.Now().Add(time.Duration(5) * time.Minute).Unix()
 
-		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
-		if updateErr != nil {
-			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
-				"The error: %s, updateErr")
-			return updateErr
+			updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
+			if updateErr != nil {
+				logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+					"The error: %s, updateErr")
+				return updateErr
+			}
+			contentToString := string(body.Bytes())
+			sendmailErr := s.emailService.SendEmail(email, "2FA login Token", contentToString)
+			if sendmailErr != nil {
+				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+				return sendmailErr
+			}
 		}
-		contentToString := string(body.Bytes())
-		sendmailErr := s.emailService.SendEmail(receiverEmail, "2FA login Token", contentToString)
-		if sendmailErr != nil {
-			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-			return sendmailErr
+
+		if purpose == "verification" {
+			t, _ := template.ParseFiles("internal/email/emailVerificationTokenTemplate.gohtml")
+			var body bytes.Buffer
+			_ = t.Execute(&body, struct {
+				Token *big.Int
+			}{
+				Token: RandomCrypto,
+			})
+			account, err := s.getAccountByEmail(ctx, email)
+			if err != nil {
+				logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
+				return err
+			}
+			account.ConfirmEmailToken = int(RandomCrypto.Int64())
+			account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
+
+			updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
+			if updateErr != nil {
+				logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
+					"The error: %s, updateErr")
+				return updateErr
+			}
+			contentToString := string(body.Bytes())
+			sendmailErr := s.emailService.SendEmail(email, "Confirm email address", contentToString)
+			if sendmailErr != nil {
+				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
+				return sendmailErr
+			}
 		}
 	}
 
-	if purpose == "verification" {
-		t, _ := template.ParseFiles("internal/email/emailVerificationTokenTemplate.gohtml")
-		var body bytes.Buffer
-		_ = t.Execute(&body, struct {
-			Token *big.Int
-		}{
-			Token: RandomCrypto,
-		})
-		account, err := s.getAccountByEmail(ctx, receiverEmail)
-		if err != nil {
-			logger.Errorf("an error occurred while trying to get account by email.\nThe error: %s, err")
-			return err
-		}
-		account.ConfirmEmailToken = int(RandomCrypto.Int64())
-		account.ConfirmEmailExpiry = time.Now().Add(time.Duration(30) * time.Minute).Unix()
-
-		updateErr := s.repo.AccountUpdate(ctx, account.Accounts)
-		if updateErr != nil {
-			logger.Errorf("an error occurred while trying to update the token to the account row.\n" +
-				"The error: %s, updateErr")
-			return updateErr
-		}
-		contentToString := string(body.Bytes())
-		sendmailErr := s.emailService.SendEmail(receiverEmail, "Confirm email address", contentToString)
-		if sendmailErr != nil {
-			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
-			return sendmailErr
-		}
-	}
-	return nil
+	return errors.Unauthorized("")
 }
 
 func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool) {

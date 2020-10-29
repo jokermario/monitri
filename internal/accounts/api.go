@@ -27,7 +27,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/generate/token", res.login(logger))
 	r.Post("/generate/mobile2fa/token", res.LoginWithMobile2FA(logger))
 	r.Post("/generate/email2fa/token", res.LoginWithEmail2FA(logger))
-	//r.Post("/generate/phone2fa/token", res.LoginWithPhone2FA(logger))
+	r.Post("/account/email/token/<purpose>", res.sendEmailVeriToken)
 	r.Post("/new/account", res.createAccount(logger))
 	r.Post("/transaction/webhook", res.paystackWebhookForTransaction(logger))
 
@@ -42,7 +42,6 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Delete("/account/delete", res.deleteById)
 	r.Post("/account/logout", res.logout)
 	r.Post("/refresh/token", res.refreshToken)
-	r.Post("/account/email/token/<purpose>", res.sendEmailVeriToken)
 	r.Post("/account/phone/token", res.sendPhoneVeriToken)
 	r.Post("/account/verify/email/<token>/<purpose>", res.verifyEmailToken)
 	r.Post("/account/verify/phone/<token>/<purpose>", res.verifyPhoneToken)
@@ -622,8 +621,13 @@ func (r resource) refreshToken(rc *routing.Context) error {
 }
 
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
-	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.generateAndSendEmailToken(rc.Request.Context(), identity.GetEmail(), rc.Param("purpose"))
+	var req LoginRequest
+
+	if err := rc.Read(&req); err != nil {
+		return errors.BadRequest("invalid request. Cannot read the request")
+	}
+
+	err := r.service.generateAndSendEmailToken(rc.Request.Context(), req.Email, rc.Param("purpose"))
 	if err != nil {
 		return errors.InternalServerError("an error occurred while generating and sending token")
 	}

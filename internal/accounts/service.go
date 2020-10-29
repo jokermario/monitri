@@ -270,9 +270,10 @@ type VerifyPaymentResponsePayload struct {
 }
 
 type InitiateTransactionRequest struct {
-	Amount    string `json:"amount"`
-	Email     string `json:"email"`
-	Reference string `json:"reference,omitempty"`
+	Amount      string `json:"amount"`
+	Email       string `json:"email"`
+	CallbackUrl string `json:"callback_url"`
+	Reference   string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`
 }
 
@@ -1372,7 +1373,6 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 
 	u, _ := url.ParseRequestURI(s.PaystackUrl)
 	urlToString := u.String()
-
 
 	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
 	request.Header.Add("Authorization", "Bearer "+s.PSec)

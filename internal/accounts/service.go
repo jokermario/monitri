@@ -80,7 +80,7 @@ type Service interface {
 	verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error)
 	setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error
 	unset2FA(ctx context.Context, id, email, passcode, authType string) error
-	get2FAType(ctx context.Context, id string) (string, error)
+	get2FAType(ctx context.Context, id string) (string, error, bool)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -1340,11 +1340,18 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
 
+	_, _, ok = s.get2FAType(ctx, id)
+	if !ok {
+		logger.Error("You must set a 2FA")
+		return errors.InternalServerError("2FAMustBeSet")
+	}
+
 	acct, err := s.getAccountByEmail(ctx, email)
 	if err != nil {
 		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
 		return err
 	}
+
 
 	if authType == "Google2FAAuth" {
 		fmt.Println("Google2FAAuth")
@@ -1484,26 +1491,26 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 	return nil
 }
 
-func (s service) get2FAType(ctx context.Context, id string) (string, error) {
+func (s service) get2FAType(ctx context.Context, id string) (string, error, bool) {
 	logger := s.logger.With(ctx, "account", id)
 	sett, err := s.getSettingsAccountById(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", errors.InternalServerError("2FANotSet")
+			return "", errors.InternalServerError("2FANotSet"), false
 		} else {
-			logger.Errorf("An error occurred while trying to retrieve the setting s for the account. The error: %s", err)
-			return "", err
+			logger.Errorf("An error occurred while trying to retrieve the settings for the account. The error: %s", err)
+			return "", err, false
 		}
 	}
 
 	if sett.TwofaGoogleAuth == 1 {
-		return "Google2FAAuth", nil
+		return "Google2FAAuth", nil, true
 	}
 
 	if sett.TwofaEmail == 1 {
-		return "Email2FAAuth", nil
+		return "Email2FAAuth", nil, true
 	}
-	return "", nil
+	return "", nil, false
 }
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------

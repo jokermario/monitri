@@ -117,7 +117,7 @@ func (r resource) verifyBankAccountNumber(rc *routing.Context) error {
 
 func (r resource) get2FAType(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
-	authType, err := r.service.get2FAType(rc.Request.Context(), identity.GetID())
+	authType, err, _ := r.service.get2FAType(rc.Request.Context(), identity.GetID())
 	if err != nil {
 		if err == errors.InternalServerError("2FANotSet"){
 			return rc.WriteWithStatus(struct {
@@ -222,6 +222,14 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 			}{
 				"failed",
 				"The token is invalid",
+			}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("2FAMustBeSet") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{
+				"failed",
+				"A 2FA must be set for the account",
 			}, http.StatusInternalServerError)
 		}else {
 			return errors.InternalServerError("An error occurred")

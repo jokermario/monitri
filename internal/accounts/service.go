@@ -1401,6 +1401,8 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		var responsePayload *PaystackGeneralResponse
 		_ = json.Unmarshal(data, &responsePayload)
 
+		fmt.Println(responsePayload)
+
 		acct.BankCode = responsePayload.Data.Details["bank_code"].(string)
 		acct.BankAccountNo = responsePayload.Data.Details["account_number"].(string)
 		acct.BankName = responsePayload.Data.Details["bank_name"].(string)

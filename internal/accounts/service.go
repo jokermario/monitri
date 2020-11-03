@@ -837,6 +837,8 @@ func (s *service) changePassword(ctx context.Context, id, email string, req Chan
 }
 
 func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
 
 	td := &TokenDetails{}
 	var accerr error
@@ -846,18 +848,12 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.AccessUUID = entity.GenerateID()
 	td.RefreshUUID = entity.GenerateID()
 
-	s.tokenMu.Lock()
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
-	s.tokenMu.Unlock()
-
 	if accerr != nil {
 		return nil, accerr
 	}
 
-	s.tokenMu.Lock()
 	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUUID, td.RtExpires)
-	s.tokenMu.Unlock()
-
 	if referr != nil {
 		return nil, referr
 	}

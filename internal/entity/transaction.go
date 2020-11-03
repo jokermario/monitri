@@ -4,10 +4,11 @@ import (
 	"time"
 )
 
+//Transactions represents a transaction info
 type Transactions struct {
-	Id                  string    `json:"-"`
-	AccountId           string    `json:"account_id"`
-	TransactionId       string    `json:"transaction_id"`
+	ID                  string    `json:"-"`
+	AccountID           string    `json:"account_id"`
+	TransactionID       string    `json:"transaction_id"`
 	Amount              int       `json:"amount"`
 	TransactionHash     string    `json:"transaction_hash"`
 	Status              string    `json:"status"`
@@ -15,12 +16,12 @@ type Transactions struct {
 	Currency            string    `json:"currency"`
 	CurrentCurrencyRate int       `json:"current_currency_rate"`
 	Description         string    `json:"description"`
-	WalletId            string    `json:"wallet_id"`
-	RecipientWalletId   string    `json:"recipient_wallet_id"`
+	WalletID            string    `json:"wallet_id"`
+	RecipientWalletID   string    `json:"recipient_wallet_id"`
 	RecipientEmail      string    `json:"recipient_email"`
 	RecipientPhone      string    `json:"recipient_phone"`
 	RecipientAccNo      string    `json:"recipient_acc_no"`
-	SendingWalletId     string    `json:"sending_wallet_id"`
+	SendingWalletID     string    `json:"sending_wallet_id"`
 	ReleaseDate         string    `json:"release_date"`
 	PaystackPayload     string    `json:"-"`
 	CreatedAt           time.Time `json:"created_at,omitempty"`

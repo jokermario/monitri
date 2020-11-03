@@ -21,7 +21,16 @@
   <component name="ChangeListManager">
     <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmd/server/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/server/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/api.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/api.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/middleware.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/ratelimiting.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/repository.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/repository.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/accounts/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/auth/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/auth/middleware.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/config/config.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -217,63 +226,77 @@
     <state width="1877" height="355" key="GridCell.Tab.1.right/-1080.0.1080.1920/0.0.1920.1080/-3000.0.1920.1080@-3000.0.1920.1080" timestamp="1599681506226" />
     <state width="1877" height="354" key="GridCell.Tab.1.right/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601570573277" />
     <state width="1877" height="354" key="GridCell.Tab.1.right/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600178588560" />
+    <state x="-1185" y="176" key="RollbackChangesDialog" timestamp="1603965537552">
+      <screen x="-1920" y="0" width="1920" height="1080" />
+    </state>
+    <state x="-1185" y="176" key="RollbackChangesDialog/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603965537552" />
     <state x="461" y="184" key="SettingsEditor" timestamp="1600322107104">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="461" y="184" key="SettingsEditor/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600322107104" />
     <state x="461" y="184" key="SettingsEditor/0.0.1920.1080@0.0.1920.1080" timestamp="1599467319927" />
-    <state x="725" y="316" key="com.goide.refactor.move.GoMoveDeclarationDialog" timestamp="1599123865740">
-      <screen x="0" y="0" width="1920" height="1080" />
+    <state x="-1195" y="259" key="com.goide.refactor.move.GoMoveDeclarationDialog" timestamp="1604390495001">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
+    <state x="-1195" y="259" key="com.goide.refactor.move.GoMoveDeclarationDialog/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604390495001" />
     <state x="725" y="316" key="com.goide.refactor.move.GoMoveDeclarationDialog/0.0.1920.1080@0.0.1920.1080" timestamp="1599123865740" />
     <state x="568" y="155" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1599070604601">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="568" y="155" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.0.1920.1080@0.0.1920.1080" timestamp="1599070604601" />
-    <state x="-1080" y="123" width="1096" height="740" maximized="true" key="dock-window-1" timestamp="1599569376036">
-      <screen x="0" y="0" width="1920" height="1080" />
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-1" timestamp="1603966188489">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-1/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603966188489" />
     <state x="-1080" y="123" width="1096" height="740" maximized="true" key="dock-window-1/0.0.1920.1080@0.0.1920.1080" timestamp="1599569376036" />
-    <state x="-1131" y="244" width="1096" height="720" maximized="true" key="dock-window-2" timestamp="1599599965477">
-      <screen x="-1080" y="0" width="1080" height="1920" />
+    <state x="-1131" y="244" width="1096" height="720" maximized="true" key="dock-window-2" timestamp="1603966188489">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1088" maximized="true" key="dock-window-2/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1599574107877" />
     <state x="-1131" y="244" width="1096" height="720" maximized="true" key="dock-window-2/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599599965477" />
-    <state x="-1080" y="0" width="1096" height="1105" maximized="true" key="dock-window-3" timestamp="1599605516500">
-      <screen x="-1080" y="0" width="1080" height="1920" />
+    <state x="-1080" y="0" width="1096" height="1105" maximized="true" key="dock-window-3" timestamp="1603966188489">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1105" maximized="true" key="dock-window-3/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599605516500" />
-    <state x="-1080" y="226" width="1096" height="1105" maximized="true" key="dock-window-4" timestamp="1599637154570">
-      <screen x="-1080" y="0" width="1080" height="1920" />
+    <state x="-1080" y="226" width="1096" height="1105" maximized="true" key="dock-window-4" timestamp="1603966188489">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="226" width="1096" height="1105" maximized="true" key="dock-window-4/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599637154570" />
-    <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5" timestamp="1599671155981">
-      <screen x="-1080" y="0" width="1080" height="1920" />
+    <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5" timestamp="1603966188490">
+      <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599671155981" />
-    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1603956066006">
+    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1604382096945">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1088" maximized="true" key="dock-window-6/-1080.0.1080.1920/0.0.1920.1080/-3000.0.1920.1080@-3000.0.1920.1080" timestamp="1599681446239" />
-    <state x="951" y="-13" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603956066006" />
-    <state x="1303" y="0" width="617" height="612" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1601830858276" />
+    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604382096945" />
+    <state x="461" y="371" width="617" height="612" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1604346656452" />
     <state x="-26" y="-17" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1600175586989" />
     <state x="-1448" y="-19" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-3000.0.1920.1080" timestamp="1600447334737" />
     <state x="-1596" y="-10" width="1918" height="1078" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600672439152" />
-    <state x="-1550" y="231" width="583" height="849" key="find.popup" timestamp="1603921975475">
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-7" timestamp="1603966188490">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1550" y="231" width="583" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603921975475" />
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-7/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603966188490" />
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-8" timestamp="1603966188490">
+      <screen x="-1920" y="0" width="1920" height="1080" />
+    </state>
+    <state x="-1828" y="92" width="1736" height="896" key="dock-window-8/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603966188490" />
+    <state x="-1550" y="231" width="648" height="849" key="find.popup" timestamp="1604309848523">
+      <screen x="-1920" y="0" width="1920" height="1080" />
+    </state>
+    <state x="-1550" y="231" width="648" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604309848523" />
     <state x="370" y="231" width="583" height="849" key="find.popup/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600679005176" />
     <state x="668" y="257" width="583" height="624" key="find.popup/0.0.1920.1080@0.0.1920.1080" timestamp="1599470533407" />
     <state x="785" y="299" key="refactoring.ChangeSignatureDialog" timestamp="1601189888987">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="785" y="299" key="refactoring.ChangeSignatureDialog/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601189888987" />
-    <state x="-1297" y="235" width="672" height="678" key="search.everywhere.popup" timestamp="1601570750771">
+    <state x="-1297" y="235" width="672" height="678" key="search.everywhere.popup" timestamp="1604390535227">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1297" y="235" width="672" height="678" key="search.everywhere.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1601570750771" />
+    <state x="-1297" y="235" width="672" height="678" key="search.everywhere.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604390535227" />
     <state x="623" y="235" width="672" height="678" key="search.everywhere.popup/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600508699044" />
     <state x="623" y="235" width="672" height="678" key="search.everywhere.popup/0.0.1920.1080@0.0.1920.1080" timestamp="1599474696975" />
   </component>

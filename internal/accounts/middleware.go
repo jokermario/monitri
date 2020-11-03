@@ -27,6 +27,7 @@ type VerificationKeyHandler func(*routing.Context) string
 // Basic and Bearer.
 var DefaultRealm = "API"
 
+//JWTOptions holds the struct that can be passed to the JWT function
 type JWTOptions struct {
 	// auth realm. Defaults to "API".
 	Realm string
@@ -44,7 +45,7 @@ func DefaultJWTTokenHandler(c *routing.Context, service Service, conn redis.Conn
 	return nil
 }
 
-// Handler returns a JWT-based authentication middleware.
+//JWT returns a routing a handler after verifying the JWT token
 func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  service2 Service, conn redis.Conn, options ...JWTOptions) routing.Handler {
 	var opt JWTOptions
 	if len(options) > 0 {
@@ -77,6 +78,9 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 					message = err.Error()
 				}
 				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
+				if err != nil {
+					message = err.Error()
+				}
 				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(AccessTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
@@ -95,6 +99,9 @@ func JWT(AccessTokenVerificationKey, RefreshTokenVerificationKey string,  servic
 					message = err.Error()
 				}
 				tokenInByte, err := service2.aesDecrypt(string(hexToByte))
+				if err != nil {
+					message = err.Error()
+				}
 				token, err := parser.Parse(string(tokenInByte), func(t *jwt.Token) (interface{}, error) { return []byte(RefreshTokenVerificationKey), nil })
 				if err == nil && token.Valid {
 					err = opt.TokenHandler(c, service2, conn,token)
@@ -124,7 +131,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 		if val == "" {
 			return errors.Unauthorized("Token is not authorized")
 		}
-		acc, _ := service2.getAccountById(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
+		acc, _ := service2.getAccountByID(c.Request.Context(), token.Claims.(jwt.MapClaims)["userId"].(string))
 		ctx := WithUser(
 			c.Request.Context(), token.Claims.(jwt.MapClaims)["accessUUID"].(string),
 			"",
@@ -161,10 +168,10 @@ const (
 // WithUser returns a context that contains the accounts identity from the given JWT.
 func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, totp string) context.Context {
 	if accessUUID != "" {
-		return context.WithValue(ctx, userKey, entity.Accounts{AccessUUID: accessUUID, Id: id, Email: email, Phone: phone, TotpSecret: totp})
+		return context.WithValue(ctx, userKey, entity.Accounts{AccessUUID: accessUUID, ID: id, Email: email, Phone: phone, TotpSecret: totp})
 	}
 	if refreshUUID != "" {
-		return context.WithValue(ctx, userKey, entity.Accounts{RefreshUUID: refreshUUID, Id: id, Email: email, Phone: phone, TotpSecret: totp})
+		return context.WithValue(ctx, userKey, entity.Accounts{RefreshUUID: refreshUUID, ID: id, Email: email, Phone: phone, TotpSecret: totp})
 	}
 
 	return nil

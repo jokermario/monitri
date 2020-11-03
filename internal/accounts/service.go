@@ -33,30 +33,32 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
 
+//Service is an interface to services
 type Service interface {
-	getAccountById(ctx context.Context, id string) (Account, error)
+	getAccountByID(ctx context.Context, id string) (Account, error)
 	getAccountByEmail(ctx context.Context, email string) (Account, error)
 	getAccountByPhone(ctx context.Context, phone string) (Account, error)
 	count(ctx context.Context) (int, error)
 	updateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error)
-	deleteById(ctx context.Context, id string) error
+	deleteByID(ctx context.Context, id string) error
 	getAccounts(ctx context.Context, offset, limit int) ([]Account, error)
-	login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string)
+	login(ctx context.Context, req LoginRequest) (*TokenDetails, string, error)
 	createAccount(ctx context.Context, req CreateAccountsRequest) error
-	changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool)
+	changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (bool, error)
 	storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error
 	checkIfKeyExist(conn redis.Conn, key string) (string, error)
 	logOut(ctx context.Context, conn redis.Conn, keys ...string) error
 	generateTokens(identity Identity) (*TokenDetails, error)
-	getAccountIdEmailPhone(ctx context.Context, id string) Identity
+	getAccountIDEmailPhone(ctx context.Context, id string) Identity
 	refreshToken(identity Identity, redisConn redis.Conn, key string, tokenDetails *TokenDetails) (*TokenDetails, error)
 	generateAndSendEmailToken(ctx context.Context, req LoginRequest, purpose string) error
-	verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool)
-	verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool)
+	verifyEmailToken(ctx context.Context, id, token, purpose string) (bool, error)
+	verifyPhoneToken(ctx context.Context, id, token, purpose string) (bool, error)
 	sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string)
 	generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error
 	setupTOTP(ctx context.Context, email string) (string, []byte, error)
@@ -68,7 +70,7 @@ type Service interface {
 	set2FA(ctx context.Context, id, email string) error
 	aesEncrypt(data string) ([]byte, error)
 	aesDecrypt(encryptedText string) ([]byte, error)
-	completedVerification(ctx context.Context, email string) (error, interface{}, bool)
+	completedVerification(ctx context.Context, email string) (interface{}, bool, error)
 	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
 	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createTrans(ctx context.Context, id, transRef string) error
@@ -80,7 +82,7 @@ type Service interface {
 	verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error)
 	setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error
 	unset2FA(ctx context.Context, id, email, passcode, authType string) error
-	get2FAType(ctx context.Context, id string) (string, error, bool)
+	get2FAType(ctx context.Context, id string) (string, bool, error)
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -105,51 +107,61 @@ type service struct {
 	RefreshTokenExpiration int
 	EncKey                 string
 	PSec                   string
-	PaystackUrl            string
+	PaystackURL            string
 }
 
+//Account represents an account entity
 type Account struct {
 	entity.Accounts
 }
 
+//Setting represents a setting entity
 type Setting struct {
 	entity.Settings
 }
 
+//Transaction represents a transaction entity
 type Transaction struct {
 	entity.Transactions
 }
 
+//TokenDetails represents the data stored in JWT
 type TokenDetails struct {
+	tokenMu      *sync.Mutex
 	AccessToken  string
 	RefreshToken string
-	AccessUuid   string
-	RefreshUuid  string
+	AccessUUID   string
+	RefreshUUID  string
 	AtExpires    int64
 	RtExpires    int64
 }
 
+//LoginRequest represents a login request body
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+//AdditionalSecLoginRequest represents the body of a login request with additional security
 type AdditionalSecLoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Token    string `json:"token"`
 }
 
+//CreateAccountsRequest represents the body of a create account request
 type CreateAccountsRequest struct {
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
 	Password string `json:"password"`
 }
 
+//ChangePasswordRequest represents the body of a change password request
 type ChangePasswordRequest struct {
 	Password string `json:"new_password"`
 }
 
+//UpdateAccountRequest represents the body of an update account request
 type UpdateAccountRequest struct {
 	Firstname  string `json:"firstname,omitempty"`
 	Middlename string `json:"middlename,omitempty"`
@@ -159,6 +171,7 @@ type UpdateAccountRequest struct {
 	Address    string `json:"address,omitempty"`
 }
 
+//Authorization represents the data in the authorization field returned in a Paystack response
 type Authorization struct {
 	AuthorizationCode string `json:"authorization_code,omitempty"`
 	Bin               string `json:"bin,omitempty"`
@@ -174,6 +187,7 @@ type Authorization struct {
 	Reusable          bool   `json:"reusable,omitempty"`
 }
 
+//TransactionTimeline represents the data in the log field returned in a paystack response
 type TransactionTimeline struct {
 	TimeSpent      int                      `json:"time_spent,omitempty"`
 	Attempts       int                      `json:"attempts,omitempty"`
@@ -186,6 +200,7 @@ type TransactionTimeline struct {
 	History        []map[string]interface{} `json:"history,omitempty"`
 }
 
+//Customer represents the data in the customer field returned in a paystack response
 type Customer struct {
 	ID           int                      `json:"id,omitempty"`
 	FirstName    string                   `json:"first_name,omitempty"`
@@ -197,6 +212,7 @@ type Customer struct {
 	RiskAction   string                   `json:"risk_action"`
 }
 
+//Plan represents the the data in the plan field returned in a paystack response
 type Plan struct {
 	ID                int     `json:"id,omitempty"`
 	CreatedAt         string  `json:"created_at,omitempty"`
@@ -217,8 +233,9 @@ type Plan struct {
 	HostedPageSummary string  `json:"hosted_page_summary,omitempty"`
 }
 
+//DataInChargeSuccessPayload represents the fields returned in the data of a paystack charge.success response
 type DataInChargeSuccessPayload struct {
-	Id              int                    `json:"id,omitempty"`
+	ID              int                    `json:"id,omitempty"`
 	Domain          string                 `json:"domain,omitempty"`
 	Status          string                 `json:"status,omitempty"`
 	Reference       string                 `json:"reference,omitempty"`
@@ -229,7 +246,7 @@ type DataInChargeSuccessPayload struct {
 	CreatedAt       string                 `json:"created_at,omitempty"`
 	Channel         string                 `json:"channel,omitempty"`
 	Currency        string                 `json:"currency,omitempty"`
-	IpAddress       string                 `json:"ip_address,omitempty"`
+	IPAddress       string                 `json:"ip_address,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 	Log             TransactionTimeline    `json:"log,omitempty"`
 	Fees            string                 `json:"fees,omitempty"`
@@ -238,6 +255,7 @@ type DataInChargeSuccessPayload struct {
 	Plan            Plan                   `json:"plan,omitempty"`
 }
 
+//DataInVerifyPaymentResponsePayload represents the fields returned in the data of a paystack verify payment response
 type DataInVerifyPaymentResponsePayload struct {
 	Amount          int                    `json:"amount,omitempty"`
 	Currency        string                 `json:"currency,omitempty"`
@@ -249,7 +267,7 @@ type DataInVerifyPaymentResponsePayload struct {
 	GatewayResponse string                 `json:"gateway_response,omitempty"`
 	Message         interface{}            `json:"message,omitempty"`
 	Channel         string                 `json:"channel,omitempty"`
-	IpAddress       string                 `json:"ip_address,omitempty"`
+	IPAddress       string                 `json:"ip_address,omitempty"`
 	Log             TransactionTimeline    `json:"log,omitempty"`
 	Fees            string                 `json:"fees,omitempty"`
 	Authorization   Authorization          `json:"authorization,omitempty"`
@@ -258,27 +276,31 @@ type DataInVerifyPaymentResponsePayload struct {
 	RequestedAmount int                    `json:"requested_amount,omitempty"`
 }
 
-type ChargeSuccessPayload struct {
+//ChargeSuccessResponsePayload represents the payload returned by paystack on a charge.success response
+type ChargeSuccessResponsePayload struct {
 	Event string                     `json:"event"`
 	Data  DataInChargeSuccessPayload `json:"data"`
 }
 
+//VerifyPaymentResponsePayload represents the payload returned by paystack on a verify payment response
 type VerifyPaymentResponsePayload struct {
 	Status  bool                               `json:"status,omitempty"`
 	Message string                             `json:"message,omitempty"`
 	Data    DataInVerifyPaymentResponsePayload `json:"data,omitempty"`
 }
 
+//InitiateTransactionRequest represents the body of an initiate transaction request
 type InitiateTransactionRequest struct {
 	Amount      string `json:"amount"`
 	Email       string `json:"email"`
-	CallbackUrl string `json:"callback_url"`
+	CallbackURL string `json:"callback_url"`
 	Reference   string `json:"reference,omitempty"`
 	//Channels []string `json:"channels,omitempty"`
 }
 
+//DataInPaystackGeneralResponse represents the fields returned in the data of a paystack general response
 type DataInPaystackGeneralResponse struct {
-	AuthorizationUrl string                 `json:"authorization_url,omitempty"`
+	AuthorizationURL string                 `json:"authorization_url,omitempty"`
 	AccessCode       string                 `json:"access_code,omitempty"`
 	Reference        string                 `json:"reference,omitempty"`
 	Type             string                 `json:"type,omitempty"`
@@ -290,17 +312,19 @@ type DataInPaystackGeneralResponse struct {
 	Currency         string                 `json:"currency,omitempty"`
 	RecipientCode    string                 `json:"recipient_code,omitempty"`
 	Active           bool                   `json:"active,omitempty"`
-	Id               int                    `json:"id,omitempty"`
+	ID               int                    `json:"id,omitempty"`
 	CreatedAt        string                 `json:"createdAt,omitempty"`
 	UpdatedAt        string                 `json:"updatedAt,omitempty"`
 }
 
+//PaystackGeneralResponse represents the general payload structur returned by paystack
 type PaystackGeneralResponse struct {
 	Status  bool                          `json:"status,omitempty"`
 	Message string                        `json:"message,omitempty"`
 	Data    DataInPaystackGeneralResponse `json:"data,omitempty"`
 }
 
+//SetBankDetailsRequest represents the body of a set bank details request
 type SetBankDetailsRequest struct {
 	Type          string `json:"type,omitempty"`
 	Name          string `json:"name,omitempty"`
@@ -308,11 +332,12 @@ type SetBankDetailsRequest struct {
 	BankCode      string `json:"bank_code"`
 }
 
+//NewService returns an instance of Service
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
-	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackUrl string) Service {
-	return service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
+	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackURL string) Service {
+	return &service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
-		RefreshTokenExpiration, EncKey, PSec, PaystackUrl}
+		RefreshTokenExpiration, EncKey, PSec, PaystackURL}
 }
 
 func (lr LoginRequest) validate() error {
@@ -341,14 +366,14 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.Middlename, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Lastname, validation.Required, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Dob, validation.Required,
-			validation.Match(regexp.MustCompile("^\\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])+$"))),
+			validation.Match(regexp.MustCompile(`^\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])+$`))),
 		validation.Field(&uar.Address, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))))
 	//validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 	//validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 	//validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
 	//validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
 	//validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
-	//validation.Field(&uar.AccountManagerId, validation.Length(36, 0)))
+	//validation.Field(&uar.AccountManagerID, validation.Length(36, 0)))
 }
 
 func (cpr ChangePasswordRequest) validate() error {
@@ -372,30 +397,31 @@ func (sbdr SetBankDetailsRequest) validate() error {
 
 // Login authenticates a accounts and generates a JWT token if authentication succeeds.
 // Otherwise, an error is returned.
-func (s service) login(ctx context.Context, req LoginRequest) (*TokenDetails, error, string) {
+func (s *service) login(ctx context.Context, req LoginRequest) (*TokenDetails, string, error) {
+
 	if err := req.validate(); err != nil {
-		return nil, err, ""
+		return nil, "", err
 	}
 	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
 
-		settingsInfo, _ := s.repo.GetSettingsById(ctx, identity.GetID())
+		settingsInfo, _ := s.repo.GetSettingsByID(ctx, identity.GetID())
 
 		if settingsInfo.TwofaGoogleAuth == 1 {
 			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "mobile2FA"
+			return TokenDetails, "mobile2FA", err
 		} else if settingsInfo.TwofaEmail == 1 {
 			_ = s.generateAndSendEmailToken(ctx, req, "login2fa")
 			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, "email2FA"
+			return TokenDetails, "email2FA", err
 		} else {
 			TokenDetails, err := s.generateTokens(identity)
-			return TokenDetails, err, ""
+			return TokenDetails, "", err
 		}
 	}
-	return nil, errors.Unauthorized(""), ""
+	return nil, "", errors.Unauthorized("")
 }
 
-func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+func (s *service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
@@ -408,12 +434,12 @@ func (s service) LoginWithMobile2FA(ctx context.Context, req AdditionalSecLoginR
 	return nil, errors.Unauthorized("")
 }
 
-func (s service) loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
+func (s *service) loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRequest) (*TokenDetails, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
 	if identity := s.authenticate(ctx, req.Email, req.Password); identity != nil {
-		_, ok := s.verifyEmailToken(ctx, identity.GetID(), req.Token, "login2fa")
+		ok, _ := s.verifyEmailToken(ctx, identity.GetID(), req.Token, "login2fa")
 		if !ok {
 			return nil, errors.Unauthorized("")
 		}
@@ -436,14 +462,14 @@ func (s service) loginWithEmail2FA(ctx context.Context, req AdditionalSecLoginRe
 //	return nil, errors.Unauthorized("")
 //}
 
-func (s service) completedVerification(ctx context.Context, email string) (error, interface{}, bool) {
+func (s *service) completedVerification(ctx context.Context, email string) (interface{}, bool, error) {
 	logger := s.logger.With(ctx, "account", email)
 	acc, err := s.getAccountByEmail(ctx, email)
 	errstrings := make(map[string]interface{})
 	if err != nil {
 		logger.Errorf("an error occurred while trying to get user account information.\nThe error: %s", err)
 		errstrings["error"] = "Invalid request"
-		return err, errstrings["error"], false
+		return errstrings["error"], false, err
 	}
 	if acc.ConfirmedEmail != 1 {
 		errstrings["email"] = "email not verified"
@@ -456,15 +482,16 @@ func (s service) completedVerification(ctx context.Context, email string) (error
 	}
 
 	if errstrings["email"] != nil || errstrings["phone"] != nil || errstrings["profile"] != nil {
-		return errors.InternalServerError("Must verify email, phone and update profile before you continue"), errstrings, false
-	} else {
-		return nil, nil, true
+		return errstrings, false, errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
+
+	return nil, true, nil
 }
 
 // authenticate authenticates a accounts using username and password.
 // If username and password are correct, an identity is returned. Otherwise, nil is returned.
-func (s service) authenticate(ctx context.Context, email, password string) Identity {
+func (s *service) authenticate(ctx context.Context, email, password string) Identity {
+
 	logger := s.logger.With(ctx, "accounts", email)
 
 	account, err := s.repo.GetAccountByEmail(ctx, email)
@@ -487,7 +514,7 @@ func (s service) authenticate(ctx context.Context, email, password string) Ident
 	return account
 }
 
-func (s service) aesEncrypt(data string) ([]byte, error) {
+func (s *service) aesEncrypt(data string) ([]byte, error) {
 	convertDataToByte := []byte(data)
 	keyToByte := []byte(s.EncKey)
 
@@ -517,7 +544,7 @@ func (s service) aesEncrypt(data string) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, convertDataToByte, nil), nil
 }
 
-func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
+func (s *service) aesDecrypt(encryptedText string) ([]byte, error) {
 
 	encryptedTextToByte := []byte(encryptedText)
 
@@ -551,35 +578,37 @@ func (s service) aesDecrypt(encryptedText string) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (s service) webHookValid(payload, payStackSig string) bool {
+func (s *service) webHookValid(payload, payStackSig string) bool {
 	hmac512 := hmac.New(sha512.New, []byte(s.PSec))
 	hmac512.Write([]byte(payload))
 	payloadSig := hex.EncodeToString(hmac512.Sum(nil))
-	if !hmac.Equal([]byte(payloadSig), []byte(payStackSig)) {
-		return false
-	}
-	return true
+	//if !hmac.Equal([]byte(payloadSig), []byte(payStackSig)) {
+	//	return false
+	//}
+	//return true
+
+	return !(!hmac.Equal([]byte(payloadSig), []byte(payStackSig)))
 }
 
 //---------------------------------------------------ACCOUNT FUNCTIONS--------------------------------------------------
 
-func (s service) getAccountById(ctx context.Context, id string) (Account, error) {
-	account, err := s.repo.GetAccountById(ctx, id)
+func (s *service) getAccountByID(ctx context.Context, id string) (Account, error) {
+	account, err := s.repo.GetAccountByID(ctx, id)
 	if err != nil {
 		return Account{}, err
 	}
 	return Account{account}, err
 }
 
-func (s service) getSettingsAccountById(ctx context.Context, id string) (Setting, error) {
-	settingsAccount, err := s.repo.GetSettingsById(ctx, id)
+func (s *service) getSettingsAccountByID(ctx context.Context, id string) (Setting, error) {
+	settingsAccount, err := s.repo.GetSettingsByID(ctx, id)
 	if err != nil {
 		return Setting{}, err
 	}
 	return Setting{settingsAccount}, err
 }
 
-func (s service) getAccountByEmail(ctx context.Context, email string) (Account, error) {
+func (s *service) getAccountByEmail(ctx context.Context, email string) (Account, error) {
 	account, err := s.repo.GetAccountByEmail(ctx, email)
 	if err != nil {
 		return Account{}, err
@@ -587,7 +616,7 @@ func (s service) getAccountByEmail(ctx context.Context, email string) (Account, 
 	return Account{account}, err
 }
 
-func (s service) getAccountByPhone(ctx context.Context, phone string) (Account, error) {
+func (s *service) getAccountByPhone(ctx context.Context, phone string) (Account, error) {
 	account, err := s.repo.GetAccountByPhone(ctx, phone)
 	if err != nil {
 		return Account{}, err
@@ -595,15 +624,15 @@ func (s service) getAccountByPhone(ctx context.Context, phone string) (Account, 
 	return Account{account}, err
 }
 
-func (s service) count(ctx context.Context) (int, error) {
+func (s *service) count(ctx context.Context) (int, error) {
 	return s.repo.AccountCount(ctx)
 }
 
-func (s service) updateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error) {
+func (s *service) updateProfile(ctx context.Context, id string, req UpdateAccountRequest) (Account, error) {
 	if err := req.validate(); err != nil {
 		return Account{}, err
 	}
-	account, err := s.getAccountById(ctx, id)
+	account, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		return Account{}, err
 	}
@@ -620,8 +649,8 @@ func (s service) updateProfile(ctx context.Context, id string, req UpdateAccount
 	return account, nil
 }
 
-func (s service) deleteById(ctx context.Context, id string) error {
-	_, err := s.getAccountById(ctx, id)
+func (s *service) deleteByID(ctx context.Context, id string) error {
+	_, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -633,7 +662,7 @@ func (s service) deleteById(ctx context.Context, id string) error {
 
 //func (s service) GenerateEmailVerificationToken(ctx context.Context, )
 
-func (s service) getAccounts(ctx context.Context, offset, limit int) ([]Account, error) {
+func (s *service) getAccounts(ctx context.Context, offset, limit int) ([]Account, error) {
 	accounts, err := s.repo.GetAccounts(ctx, offset, limit)
 	if err != nil {
 		return nil, err
@@ -645,37 +674,37 @@ func (s service) getAccounts(ctx context.Context, offset, limit int) ([]Account,
 	return result, nil
 }
 
-func (s service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string) {
+func (s *service) sendLoginNotifEmail(ctx context.Context, email, time, ipaddress, device string) {
 	logger := s.logger.With(ctx, "accounts", email)
 	t, _ := template.ParseFiles("internal/email/loginNotificationEmailTemplate.gohtml")
 	var body bytes.Buffer
 	_ = t.Execute(&body, struct {
 		Email     string
 		Time      string
-		IpAddress string
+		IPAddress string
 		Device    string
 	}{
 		Email:     email,
 		Time:      time,
-		IpAddress: ipaddress,
+		IPAddress: ipaddress,
 		Device:    device,
 	})
-	contentToString := string(body.Bytes())
+	contentToString := body.String()
 	err := s.emailService.SendEmail(email, "Sign-in Notification", contentToString)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to send login notif email. The error %s", err)
 	}
 }
 
-func (s service) getAccountIdEmailPhone(ctx context.Context, id string) Identity {
-	accountInfo, err := s.repo.GetAccountIdEmailPhone(ctx, id)
+func (s *service) getAccountIDEmailPhone(ctx context.Context, id string) Identity {
+	accountInfo, err := s.repo.GetAccountIDEmailPhone(ctx, id)
 	if err != nil {
 		return nil
 	}
-	return entity.Accounts{Id: accountInfo.Id, Email: accountInfo.Email, Phone: accountInfo.Phone}
+	return entity.Accounts{ID: accountInfo.ID, Email: accountInfo.Email, Phone: accountInfo.Phone}
 }
 
-func (s service) createAccount(ctx context.Context, req CreateAccountsRequest) error {
+func (s *service) createAccount(ctx context.Context, req CreateAccountsRequest) error {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
 		return err
@@ -690,7 +719,7 @@ func (s service) createAccount(ctx context.Context, req CreateAccountsRequest) e
 
 	// FIXME I knowingly didn't check for already existing email coz i'm relying on sql uniqueness in DB
 	err := s.repo.AccountCreate(ctx, entity.Accounts{
-		Id:        strings.TrimSpace(id),
+		ID:        strings.TrimSpace(id),
 		Email:     strings.TrimSpace(req.Email),
 		Phone:     strings.TrimSpace(req.Phone),
 		Password:  string(hashedPass),
@@ -712,7 +741,7 @@ func (s service) createAccount(ctx context.Context, req CreateAccountsRequest) e
 	return nil
 }
 
-func (s service) verifyPassword(password string) error {
+func (s *service) verifyPassword(password string) error {
 	var uppercasePresent bool
 	var lowercasePresent bool
 	var numberPresent bool
@@ -771,23 +800,23 @@ func (s service) verifyPassword(password string) error {
 	return nil
 }
 
-func (s service) changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (error, bool) {
+func (s *service) changePassword(ctx context.Context, id, email string, req ChangePasswordRequest) (bool, error) {
 	logger := s.logger.With(ctx, "account", id)
 	if strErr := req.validate(); strErr != nil {
 		logger.Errorf("validation failed.\n"+
 			"The error: %s", strErr)
-		return strErr, false
+		return false, strErr
 	}
 	if err := s.verifyPassword(req.Password); err != nil {
 		logger.Errorf("validation failed.\n"+
 			"The error: %s", err)
-		return err, false
+		return false, err
 	}
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to fetch the account.\n"+
 			"The error: %s", err)
-		return err, false
+		return false, err
 	}
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	acc.Password = string(hashedPass)
@@ -795,53 +824,60 @@ func (s service) changePassword(ctx context.Context, id, email string, req Chang
 	if updateErr != nil {
 		logger.Errorf("an error occurred while trying to update the password to the account row.\n"+
 			"The error: %s", updateErr)
-		return updateErr, false
+		return false, updateErr
 	}
 	content, _ := ioutil.ReadFile("internal/email/passwordChangedNotificationTemplate.gohtml")
 	contentToString := string(content)
 	emailErr := s.emailService.SendEmail(email, "Password Change Notification", contentToString)
 	if emailErr != nil {
 		s.logger.Errorf("an error occurred while trying to send pass change notif email.\nThe error: %s", err)
-		return emailErr, false
+		return false, emailErr
 	}
-	return nil, true
+	return true, nil
 }
 
-func (s service) generateTokens(identity Identity) (*TokenDetails, error) {
+func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
+
 	td := &TokenDetails{}
 	var accerr error
 	var referr error
 	td.AtExpires = time.Now().Add(time.Duration(s.AccessTokenExpiration) * time.Hour).Unix()
 	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
-	td.AccessUuid = entity.GenerateID()
-	td.RefreshUuid = entity.GenerateID()
+	td.AccessUUID = entity.GenerateID()
+	td.RefreshUUID = entity.GenerateID()
 
-	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUuid, td.AtExpires)
+	td.tokenMu.Lock()
+	defer td.tokenMu.Unlock()
+
+	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
 	if accerr != nil {
 		return nil, accerr
 	}
-	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUuid, td.RtExpires)
+	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUUID, td.RtExpires)
 	if referr != nil {
 		return nil, referr
 	}
 	return td, nil
 }
 
-func (s service) refreshToken(identity Identity, redisConn redis.Conn,
+func (s *service) refreshToken(identity Identity, redisConn redis.Conn,
 	key string, tokenDetails *TokenDetails) (*TokenDetails, error) {
 	td := &TokenDetails{}
 	var accerr error
 	var referr error
 	td.AtExpires = time.Now().Add(time.Duration(s.AccessTokenExpiration) * time.Hour).Unix()
 	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
-	td.AccessUuid = tokenDetails.AccessUuid
-	td.RefreshUuid = tokenDetails.RefreshUuid
+	td.AccessUUID = tokenDetails.AccessUUID
+	td.RefreshUUID = tokenDetails.RefreshUUID
 
-	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUuid, td.AtExpires)
+	td.tokenMu.Lock()
+	defer td.tokenMu.Unlock()
+
+	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
 	if accerr != nil {
 		return nil, accerr
 	}
-	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUuid, td.RtExpires)
+	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUUID, td.RtExpires)
 	if referr != nil {
 		return nil, referr
 	}
@@ -854,7 +890,7 @@ func (s service) refreshToken(identity Identity, redisConn redis.Conn,
 }
 
 // generateAccessToken generates a JWT that encodes an identity.
-func (s service) generateAccessToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
+func (s *service) generateAccessToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"authorized": true,
 		"accessUUID": tokenUUID,
@@ -866,7 +902,7 @@ func (s service) generateAccessToken(identity Identity, tokenUUID string, expiry
 }
 
 // generateRefreshToken generates a JWT that encodes an identity used to regenerate an access token.
-func (s service) generateRefreshToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
+func (s *service) generateRefreshToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"refreshUUID": tokenUUID,
 		"userId":      identity.GetID(),
@@ -875,7 +911,7 @@ func (s service) generateRefreshToken(identity Identity, tokenUUID string, expir
 	}).SignedString([]byte(s.RefreshTokenSigningKey))
 }
 
-func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest, purpose string) error {
+func (s *service) generateAndSendEmailToken(ctx context.Context, req LoginRequest, purpose string) error {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
 		return err
@@ -904,7 +940,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest
 					"The error: %s, updateErr")
 				return updateErr
 			}
-			contentToString := string(body.Bytes())
+			contentToString := body.String()
 			sendmailErr := s.emailService.SendEmail(req.Email, "2FA login Token", contentToString)
 			if sendmailErr != nil {
 				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -934,7 +970,7 @@ func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest
 					"The error: %s, updateErr")
 				return updateErr
 			}
-			contentToString := string(body.Bytes())
+			contentToString := body.String()
 			sendmailErr := s.emailService.SendEmail(req.Email, "Confirm email address", contentToString)
 			if sendmailErr != nil {
 				logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -947,12 +983,12 @@ func (s service) generateAndSendEmailToken(ctx context.Context, req LoginRequest
 	return errors.Unauthorized("")
 }
 
-func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string) (error, bool) {
+func (s *service) verifyEmailToken(ctx context.Context, id, token, purpose string) (bool, error) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify email token.\nThe error: %s", err)
-		return err, false
+		return false, err
 	}
 	if purpose == "login2fa" {
 		tokenExpiry := time.Unix(acc.LoginEmailExpiry, 0)
@@ -960,13 +996,13 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 
 		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
 			logger.Errorf("email token expired")
-			return errors.InternalServerError("emailTokenExpired"), false
+			return false, errors.InternalServerError("emailTokenExpired")
 		}
 
 		i, _ := strconv.Atoi(token)
 
 		if i != acc.LoginEmailToken {
-			return nil, false
+			return false, nil
 		}
 	}
 
@@ -976,13 +1012,13 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 
 		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
 			logger.Errorf("email token expired")
-			return errors.InternalServerError("emailTokenExpired"), false
+			return false, errors.InternalServerError("emailTokenExpired")
 		}
 
 		i, _ := strconv.Atoi(token)
 
 		if i != acc.ConfirmEmailToken {
-			return nil, false
+			return false, nil
 		}
 
 		acc.ConfirmedEmail = 1
@@ -993,10 +1029,10 @@ func (s service) verifyEmailToken(ctx context.Context, id, token, purpose string
 		}
 	}
 
-	return nil, true
+	return true, nil
 }
 
-func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error {
+func (s *service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, purpose string) error {
 	logger := s.logger.With(ctx, "account", receiverPhone)
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 	account, err := s.getAccountByPhone(ctx, receiverPhone)
@@ -1018,7 +1054,7 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 
 		tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
 
-		_, ok := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your login 2FA token is "+tokenToString+
+		ok, _ := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your login 2FA token is "+tokenToString+
 			". it expires in 10 minutes")
 		if !ok {
 			logger.Errorf("an error occurred while trying to send token to mobile")
@@ -1039,7 +1075,7 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 
 		tokenToString := strconv.Itoa(int(RandomCrypto.Int64()))
 
-		_, ok := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
+		ok, _ := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
 			". it expires in 10 minutes")
 		fmt.Println("here")
 		if !ok {
@@ -1051,12 +1087,12 @@ func (s service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, p
 	return nil
 }
 
-func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string) (error, bool) {
+func (s *service) verifyPhoneToken(ctx context.Context, id, token, purpose string) (bool, error) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to verify phone token.\nThe error: %s", err)
-		return err, false
+		return false, err
 	}
 	if purpose == "login2fa" {
 		tokenExpiry := time.Unix(acc.LoginPhoneExpiry, 0)
@@ -1064,13 +1100,13 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 
 		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
 			logger.Errorf("phone token expired")
-			return errors.InternalServerError("phoneTokenExpired"), false
+			return false, errors.InternalServerError("phoneTokenExpired")
 		}
 
 		i, _ := strconv.Atoi(token)
 
 		if i != acc.LoginPhoneToken {
-			return nil, false
+			return false, nil
 		}
 	}
 
@@ -1080,13 +1116,13 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 
 		if int64(tokenExpiry.Sub(now).Seconds()) < 0 {
 			logger.Errorf("phone token expired")
-			return errors.InternalServerError("phoneTokenExpired"), false
+			return false, errors.InternalServerError("phoneTokenExpired")
 		}
 
 		i, _ := strconv.Atoi(token)
 
 		if i != acc.ConfirmPhoneToken {
-			return nil, false
+			return false, nil
 		}
 
 		acc.ConfirmedPhone = 1
@@ -1097,12 +1133,12 @@ func (s service) verifyPhoneToken(ctx context.Context, id, token, purpose string
 		}
 	}
 
-	return nil, true
+	return true, nil
 }
 
-func (s service) set2FA(ctx context.Context, id, email string) error {
+func (s *service) set2FA(ctx context.Context, id, email string) error {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying get account.\nThe error: %s", err)
 		return err
@@ -1113,11 +1149,11 @@ func (s service) set2FA(ctx context.Context, id, email string) error {
 	//		return err
 	//	}
 	//
-	//	setAcct, err := s.getSettingsAccountById(ctx, id)
+	//	setAcct, err := s.getSettingsAccountByID(ctx, id)
 	//	if err != nil {
 	//		if err == sql.ErrNoRows {
 	//			if err := s.repo.CreateSettings(ctx, entity.Settings{
-	//				AccountId:  acc.Id,
+	//				AccountID:  acc.ID,
 	//				TwofaPhone: 1,
 	//			}); err != nil {
 	//				logger.Errorf("could not insert into settings row\nThe error: %s", err)
@@ -1152,13 +1188,13 @@ func (s service) set2FA(ctx context.Context, id, email string) error {
 		return errors.InternalServerError("emailFaulty")
 	}
 
-	setAcct, err := s.getSettingsAccountById(ctx, id)
+	setAcct, err := s.getSettingsAccountByID(ctx, id)
 	pid := entity.GenerateID()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if err := s.repo.CreateSettings(ctx, entity.Settings{
-				Id:         pid,
-				AccountId:  acc.Id,
+				ID:         pid,
+				AccountID:  acc.ID,
 				TwofaEmail: 1,
 			}); err != nil {
 				logger.Errorf("could not insert into settings row\nThe error: %s", err)
@@ -1187,7 +1223,7 @@ func (s service) set2FA(ctx context.Context, id, email string) error {
 	}{
 		Message: "2FA has been enabled on your email: " + email + ".",
 	})
-	contentToString := string(body.Bytes())
+	contentToString := body.String()
 	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
 	if sendmailErr != nil {
 		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -1196,7 +1232,7 @@ func (s service) set2FA(ctx context.Context, id, email string) error {
 	return nil
 }
 
-func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, error) {
+func (s *service) setupTOTP(ctx context.Context, email string) (string, []byte, error) {
 	logger := s.logger.With(ctx, "account", email)
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      "Monitri",
@@ -1214,9 +1250,9 @@ func (s service) setupTOTP(ctx context.Context, email string) (string, []byte, e
 	return key.Secret(), buf.Bytes(), nil
 }
 
-func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) (bool, error) {
+func (s *service) validateTOTPFirstTime(ctx context.Context, id, email, passcode, secret string) (bool, error) {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying to fetch user acc. The error: %s", err)
 	}
@@ -1227,11 +1263,11 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	}
 	acc.TotpSecret = secret
 	acc.UpdatedAt = time.Now()
-	setAcct, err := s.getSettingsAccountById(ctx, id)
+	setAcct, err := s.getSettingsAccountByID(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if errr := s.repo.updateAccountAndSettingsTableTrans(ctx, acc.Accounts, entity.Settings{
-				AccountId:       acc.Id,
+				AccountID:       acc.ID,
 				TwofaGoogleAuth: 1,
 			}, "insert"); errr != nil {
 				logger.Errorf("an error occurred while trying to update totp secret for the acc. The error: %s", errr)
@@ -1260,7 +1296,7 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	}{
 		Message: "You just activated Google Authenticator 2FA on your account!.",
 	})
-	contentToString := string(body.Bytes())
+	contentToString := body.String()
 	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
 	if sendmailErr != nil {
 		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -1269,7 +1305,7 @@ func (s service) validateTOTPFirstTime(ctx context.Context, id, email, passcode,
 	return true, nil
 }
 
-func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool {
+func (s *service) validateTOTP(ctx context.Context, passcode, secret string) bool {
 	logger := s.logger.With(ctx, "account", secret)
 	if ok := totp.Validate(passcode, secret); !ok {
 		logger.Errorf("passcode validation failed.")
@@ -1278,9 +1314,9 @@ func (s service) validateTOTP(ctx context.Context, passcode, secret string) bool
 	return true
 }
 
-func (s service) getBanks(ctx context.Context) ([]byte, error) {
+func (s *service) getBanks(ctx context.Context) ([]byte, error) {
 	logger := s.logger.With(ctx)
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	u, _ := url.ParseRequestURI(s.PaystackURL)
 	urlToString := u.String()
 
 	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank", nil)
@@ -1301,10 +1337,10 @@ func (s service) getBanks(ctx context.Context) ([]byte, error) {
 	return nil, errors.InternalServerError("An unhandled error occurred")
 }
 
-func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error) {
+func (s *service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error) {
 	logger := s.logger.With(ctx)
 
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	u, _ := url.ParseRequestURI(s.PaystackURL)
 	urlToString := u.String()
 
 	request, _ := http.NewRequest(http.MethodGet, urlToString+"/bank/resolve?account_number="+bankAcctNo+"&bank_code="+bankCode, nil)
@@ -1325,8 +1361,11 @@ func (s service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo stri
 	return nil, false, errors.InternalServerError("An unhandled error occurred")
 }
 
-func (s service) setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error {
+func (s *service) setBankDetails(ctx context.Context, id, email, passcode, authType string, req SetBankDetailsRequest) error {
 	logger := s.logger.With(ctx, "account", email)
+	if err := req.validate(); err != nil {
+		return err
+	}
 
 	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
 	if !ok {
@@ -1334,13 +1373,13 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 
-	_, _, ok = s.completedVerification(ctx, email)
+	_, ok, _ = s.completedVerification(ctx, email)
 	if !ok {
 		logger.Error("Must verify email, phone and update profile before you continue")
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
 
-	_, _, ok = s.get2FAType(ctx, id)
+	_, ok, _ = s.get2FAType(ctx, id)
 	if !ok {
 		logger.Error("You must set a 2FA")
 		return errors.InternalServerError("2FAMustBeSet")
@@ -1352,7 +1391,10 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 
-
+	/*todo i made sure that a 2FA must be set using the authType. it was later discussed that we should not force the
+	*	user to have a 2FA. So by default the client dev. should Email2FAAuth as default, irrespective of whether its set
+	*	as 2FA or not. But before that a check for 2FA should be made if 2FA is set
+	*	the function is good to go else email2FAAuth becomes default */
 	if authType == "Google2FAAuth" {
 		fmt.Println("Google2FAAuth")
 		if ok := totp.Validate(passcode, acct.TotpSecret); !ok {
@@ -1362,7 +1404,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 	}
 
 	if authType == "Email2FAAuth" {
-		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
+		ok, _ := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
 			return errors.InternalServerError("TokenInvalid")
@@ -1378,7 +1420,7 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 		return err
 	}
 
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	u, _ := url.ParseRequestURI(s.PaystackURL)
 	urlToString := u.String()
 
 	request, _ := http.NewRequest(http.MethodPost, urlToString+"/transferrecipient", bytes.NewBuffer(b))
@@ -1412,15 +1454,15 @@ func (s service) setBankDetails(ctx context.Context, id, email, passcode, authTy
 	return nil
 }
 
-func (s service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {
+func (s *service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {
 	logger := s.logger.With(ctx, "account", id)
-	acc, err := s.getAccountById(ctx, id)
+	acc, err := s.getAccountByID(ctx, id)
 	if err != nil {
 		logger.Errorf("an error occurred while trying get account.\nThe error: %s", err)
 		return err
 	}
 	if authType == "Google2FAAuth" {
-		setAcct, err := s.getSettingsAccountById(ctx, id)
+		setAcct, err := s.getSettingsAccountByID(ctx, id)
 		if err != nil {
 			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)
 			return errors.InternalServerError("settingsNotExist")
@@ -1445,7 +1487,7 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 		}{
 			Message: "You have disabled Google Auth 2FA on your account:" + email + ".",
 		})
-		contentToString := string(body.Bytes())
+		contentToString := body.String()
 		sendmailErr := s.emailService.SendEmail(email, "2FA De-activation Authorised", contentToString)
 		if sendmailErr != nil {
 			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -1455,13 +1497,13 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 	}
 
 	if authType == "Email2FAAuth" {
-		setAcct, err := s.getSettingsAccountById(ctx, id)
+		setAcct, err := s.getSettingsAccountByID(ctx, id)
 		if err != nil {
 			logger.Errorf("an error occurred while trying get account settings.\nThe error: %s", err)
 			return errors.InternalServerError("settingsNotExist")
 		}
 
-		_, ok := s.verifyEmailToken(ctx, id, passcode, "login2fa")
+		ok, _ := s.verifyEmailToken(ctx, id, passcode, "login2fa")
 		if !ok {
 			logger.Errorf("an error occurred while trying to verify the token.\nThe error: %s", err)
 			return errors.InternalServerError("TokenInvalid")
@@ -1480,7 +1522,7 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 		}{
 			Message: "You have disabled 2FA on your account email:" + email + ".",
 		})
-		contentToString := string(body.Bytes())
+		contentToString := body.String()
 		sendmailErr := s.emailService.SendEmail(email, "2FA De-activation Authorised", contentToString)
 		if sendmailErr != nil {
 			logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
@@ -1491,31 +1533,30 @@ func (s service) unset2FA(ctx context.Context, id, email, passcode, authType str
 	return nil
 }
 
-func (s service) get2FAType(ctx context.Context, id string) (string, error, bool) {
+func (s *service) get2FAType(ctx context.Context, id string) (string, bool, error) {
 	logger := s.logger.With(ctx, "account", id)
-	sett, err := s.getSettingsAccountById(ctx, id)
+	sett, err := s.getSettingsAccountByID(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", errors.InternalServerError("2FANotSet"), false
-		} else {
-			logger.Errorf("An error occurred while trying to retrieve the settings for the account. The error: %s", err)
-			return "", err, false
+			return "", false, errors.InternalServerError("2FANotSet")
 		}
+		logger.Errorf("An error occurred while trying to retrieve the settings for the account. The error: %s", err)
+		return "", false, err
 	}
 
 	if sett.TwofaGoogleAuth == 1 {
-		return "Google2FAAuth", nil, true
+		return "Google2FAAuth", true, nil
 	}
 
 	if sett.TwofaEmail == 1 {
-		return "Email2FAAuth", nil, true
+		return "Email2FAAuth", true, nil
 	}
-	return "", nil, false
+	return "", false, nil
 }
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 
-func (s service) getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
+func (s *service) getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error) {
 	transaction, err := s.repo.GetTransactionByTransRef(ctx, transRef)
 	if err != nil {
 		return Transaction{}, err
@@ -1535,14 +1576,14 @@ func (s service) getTransactionByTransRef(ctx context.Context, transRef string) 
 //	return Transaction{trans}, nil
 //}
 
-func (s service) createTrans(ctx context.Context, accId, transRef string) error {
+func (s *service) createTrans(ctx context.Context, accID, transRef string) error {
 	//.Format(time.RFC3339),
-	logger := s.logger.With(ctx, "transaction", accId)
+	logger := s.logger.With(ctx, "transaction", accID)
 	id := entity.GenerateID()
 	err := s.repo.TransactionCreate(ctx, entity.Transactions{
-		Id:            id,
-		AccountId:     accId,
-		TransactionId: transRef,
+		ID:            id,
+		AccountID:     accID,
+		TransactionID: transRef,
 		Status:        "pending",
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
@@ -1554,7 +1595,7 @@ func (s service) createTrans(ctx context.Context, accId, transRef string) error 
 	return nil
 }
 
-func (s service) updateTrans(ctx context.Context, acctId, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error {
+func (s *service) updateTrans(ctx context.Context, acctID, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error {
 	logger := s.logger.With(ctx, "transaction", transRef)
 	trans, err := s.getTransactionByTransRef(ctx, transRef)
 	if err != nil {
@@ -1567,7 +1608,7 @@ func (s service) updateTrans(ctx context.Context, acctId, transRef, status, tran
 	trans.Currency = currency
 	trans.PaystackPayload = requestPayload
 
-	acct, err := s.getAccountById(ctx, acctId)
+	acct, err := s.getAccountByID(ctx, acctID)
 	if err != nil {
 		logger.Errorf("error occurred while trying to fetch the account that has the transaction with the ref %s", transRef)
 		return err
@@ -1582,8 +1623,8 @@ func (s service) updateTrans(ctx context.Context, acctId, transRef, status, tran
 	return nil
 }
 
-func (s service) verifyOnPaystack(transRef string) bool {
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
+func (s *service) verifyOnPaystack(transRef string) bool {
+	u, _ := url.ParseRequestURI(s.PaystackURL)
 	urlToString := u.String()
 
 	req, _ := http.NewRequest(http.MethodGet, urlToString+"/transaction/verify/"+transRef, nil)
@@ -1607,7 +1648,7 @@ func (s service) verifyOnPaystack(transRef string) bool {
 	return false
 }
 
-func (s service) initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error) {
+func (s *service) initiateTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error) {
 	logger := s.logger.With(ctx, "account", req.Email)
 	if err := req.validate(); err != nil {
 		fmt.Printf("valdation error is: %s", err)
@@ -1616,7 +1657,7 @@ func (s service) initiateTransaction(ctx context.Context, id string, req Initiat
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 	req.Reference = strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(RandomCrypto.Int64()))
 
-	u, _ := url.ParseRequestURI(s.PaystackUrl)
+	u, _ := url.ParseRequestURI(s.PaystackURL)
 	urlToString := u.String()
 
 	b, err := json.Marshal(req)
@@ -1640,7 +1681,7 @@ func (s service) initiateTransaction(ctx context.Context, id string, req Initiat
 
 		var responsePayload *PaystackGeneralResponse
 		_ = json.Unmarshal(dataa, &responsePayload)
-		respJson, err := json.Marshal(responsePayload)
+		respJSON, err := json.Marshal(responsePayload)
 		if err != nil {
 			logger.Errorf("An error occurred while trying to convert the response struct to json. Error msg is: %s", err)
 			return nil, err
@@ -1649,35 +1690,35 @@ func (s service) initiateTransaction(ctx context.Context, id string, req Initiat
 			logger.Errorf("An error occurred while trying to write transaction to DB. Error msg is: %s", err)
 			return nil, err
 		}
-		return respJson, nil
+		return respJSON, nil
 	}
 	return nil, errors.BadRequest("")
 }
 
 //----------------------------------------------------REDIS FUNCTIONS---------------------------------------------------
 
-func (s service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error {
+func (s *service) storeAuthKeys(conn redis.Conn, email string, td *TokenDetails) error {
 	at := time.Unix(td.AtExpires, 0) //converting unix to UTC(to time object)
 	rt := time.Unix(td.RtExpires, 0)
 	now := time.Now()
 
-	errAccess := s.repo.SetRedisKey(conn, int64(at.Sub(now).Seconds()), td.AccessUuid, email)
+	errAccess := s.repo.SetRedisKey(conn, int64(at.Sub(now).Seconds()), td.AccessUUID, email)
 	if errAccess != nil {
 		return errAccess
 	}
-	errRefresh := s.repo.SetRedisKey(conn, int64(rt.Sub(now).Seconds()), td.RefreshUuid, email)
+	errRefresh := s.repo.SetRedisKey(conn, int64(rt.Sub(now).Seconds()), td.RefreshUUID, email)
 	if errRefresh != nil {
 		return errRefresh
 	}
 	return nil
 }
 
-func (s service) checkIfKeyExist(conn redis.Conn, key string) (string, error) {
+func (s *service) checkIfKeyExist(conn redis.Conn, key string) (string, error) {
 	val, err := s.repo.GetRedisKey(conn, key)
 	return val, err
 }
 
-func (s service) logOut(ctx context.Context, conn redis.Conn, keys ...string) error {
+func (s *service) logOut(ctx context.Context, conn redis.Conn, keys ...string) error {
 	logger := s.logger.With(ctx, "accessUUID", keys)
 	_ = s.repo.DeleteRedisKeys(conn, keys...)
 	logger.Infof("deleted redis key %s", keys)

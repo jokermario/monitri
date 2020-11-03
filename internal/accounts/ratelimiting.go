@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+//RateHandler returns a handler that handles rate limiting
 func RateHandler() routing.Handler {
 	return func(c *routing.Context) error {
 		ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
@@ -19,7 +20,7 @@ func RateHandler() routing.Handler {
 			return routing.NewHTTPError(http.StatusInternalServerError)
 		}
 		limiter := getVisitor(ip)
-		if limiter.Allow() == false {
+		if !limiter.Allow() {
 			return routing.NewHTTPError(http.StatusTooManyRequests)
 		}
 		return nil

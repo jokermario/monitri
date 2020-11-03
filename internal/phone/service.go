@@ -11,7 +11,7 @@ import (
 )
 
 type Service interface {
-	SendSMSToMobile(to, message string) (error, bool)
+	SendSMSToMobile(to, message string) (bool, error)
 }
 
 type service struct {
@@ -43,7 +43,7 @@ type responsePayload struct {
 	SMSMessageData smsMessageData `json:"SMSMessageData"`
 }
 
-func (s service) SendSMSToMobile(to, message string) (error, bool) {
+func (s service) SendSMSToMobile(to, message string) (bool, error) {
 	data := url.Values{}
 	data.Set("username", s.SMSUsername)
 	data.Set("to", to)
@@ -72,9 +72,9 @@ func (s service) SendSMSToMobile(to, message string) (error, bool) {
 		var responsePayload *responsePayload
 		_ = json.Unmarshal(dataa, &responsePayload)
 		if responsePayload.SMSMessageData.Recipients[0].StatusCode == 101 {
-			return nil, true
+			return true, nil
 		}
 
 	}
-	return nil, false
+	return false, nil
 }

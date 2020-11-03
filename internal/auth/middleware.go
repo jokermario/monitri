@@ -36,7 +36,7 @@ package auth
 //
 //// WithUser returns a context that contains the accounts identity from the given JWT.
 //func WithUser(ctx context.Context, id, email, phone string) context.Context {
-//	return context.WithValue(ctx, userKey, entity.Accounts{Id: id, Email: email, Phone: phone})
+//	return context.WithValue(ctx, userKey, entity.Accounts{ID: id, Email: email, Phone: phone})
 //}
 //
 //// CurrentAccount returns the accounts identity from the given context.

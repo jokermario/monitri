@@ -863,7 +863,7 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
-		if err == errors.InternalServerError("veriErr"){
+		if err == errors.InternalServerError("VeriErr"){
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`

@@ -97,6 +97,7 @@ type Identity interface {
 }
 
 type service struct {
+	tokenMu                *sync.Mutex
 	repo                   Repository
 	logger                 log.Logger
 	emailService           email.Service
@@ -127,7 +128,6 @@ type Transaction struct {
 
 //TokenDetails represents the data stored in JWT
 type TokenDetails struct {
-	tokenMu      *sync.Mutex
 	AccessToken  string
 	RefreshToken string
 	AccessUUID   string
@@ -335,7 +335,7 @@ type SetBankDetailsRequest struct {
 //NewService returns an instance of Service
 func NewService(repo Repository, logger log.Logger, email email.Service, phoneVeriService phone.Service, AccessTokenSigningKey,
 	RefreshTokenSigningKey string, AccessTokenExpiration, RefreshTokenExpiration int, EncKey, PSec, PaystackURL string) Service {
-	return &service{repo, logger, email, phoneVeriService, AccessTokenSigningKey,
+	return &service{nil, repo, logger, email, phoneVeriService, AccessTokenSigningKey,
 		RefreshTokenSigningKey, AccessTokenExpiration,
 		RefreshTokenExpiration, EncKey, PSec, PaystackURL}
 }
@@ -846,8 +846,9 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.AccessUUID = entity.GenerateID()
 	td.RefreshUUID = entity.GenerateID()
 
-	//td.tokenMu.Lock()
-	//defer td.tokenMu.Unlock()
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+
 	fmt.Println(td.RefreshUUID)
 
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
@@ -872,9 +873,6 @@ func (s *service) refreshToken(identity Identity, redisConn redis.Conn,
 	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
 	td.AccessUUID = tokenDetails.AccessUUID
 	td.RefreshUUID = tokenDetails.RefreshUUID
-
-	td.tokenMu.Lock()
-	defer td.tokenMu.Unlock()
 
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
 	if accerr != nil {

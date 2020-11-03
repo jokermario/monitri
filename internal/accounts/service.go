@@ -871,6 +871,9 @@ func (s *service) refreshToken(identity Identity, redisConn redis.Conn,
 	td.AccessUUID = tokenDetails.AccessUUID
 	td.RefreshUUID = tokenDetails.RefreshUUID
 
+	td.tokenMu.Lock()
+	defer td.tokenMu.Unlock()
+
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
 	if accerr != nil {
 		return nil, accerr
@@ -1377,11 +1380,11 @@ func (s *service) setBankDetails(ctx context.Context, id, email, passcode, authT
 		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
 
-	_, ok, _ = s.get2FAType(ctx, id)
-	if !ok {
-		logger.Error("You must set a 2FA")
-		return errors.InternalServerError("2FAMustBeSet")
-	}
+	//_, ok, _ = s.get2FAType(ctx, id)
+	//if !ok {
+	//	logger.Error("You must set a 2FA")
+	//	return errors.InternalServerError("2FAMustBeSet")
+	//}
 
 	acct, err := s.getAccountByEmail(ctx, email)
 	if err != nil {
@@ -1652,6 +1655,13 @@ func (s *service) initiateTransaction(ctx context.Context, id string, req Initia
 		fmt.Printf("valdation error is: %s", err)
 		return nil, err
 	}
+
+	_, ok, _ := s.completedVerification(ctx, req.Email)
+	if !ok {
+		logger.Error("Must verify email, phone and update profile before you continue")
+		return nil, errors.InternalServerError("VeriErr")
+	}
+
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 	req.Reference = strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(RandomCrypto.Int64()))
 

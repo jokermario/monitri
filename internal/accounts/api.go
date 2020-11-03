@@ -863,10 +863,16 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
+		if err == errors.InternalServerError("veriErr"){
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "Must verify email, phone and update profile before you continue"}, http.StatusInternalServerError)
+		}
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-		}{"failed", "transaction initiation failed"}, http.StatusBadRequest)
+		}{"failed", "transaction initiation failed"}, http.StatusInternalServerError)
 	}
 
 	type dataToReturn struct {

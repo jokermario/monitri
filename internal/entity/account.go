@@ -23,20 +23,20 @@ type Accounts struct {
 	BankName           string    `json:"bank_name,omitempty"`
 	RecipientCode      string    `json:"recipient_code"`
 	CurrentBalance     int       `json:"current_balance"`
-	NOKFullname        string    `json:"nok_fullname"`
-	NOKPhone           string    `json:"nok_phone"`
-	NOKEmail           string    `json:"nok_email"`
-	NOKAddress         string    `json:"nok_address"`
+	NOKFullname        string    `json:"nok_fullname,omitempty"`
+	NOKPhone           string    `json:"nok_phone,omitempty"`
+	NOKEmail           string    `json:"nok_email,omitempty"`
+	NOKAddress         string    `json:"nok_address,omitempty"`
 	ConfirmedEmail     int       `json:"confirmed_email,omitempty"`
-	ConfirmEmailToken  int       `json:"confirm_email_token,omitempty"`
-	ConfirmEmailExpiry int64     `json:"confirm_email_expiry,omitempty"`
+	ConfirmEmailToken  int       `json:"-"`
+	ConfirmEmailExpiry int64     `json:"-"`
 	ConfirmedPhone     int       `json:"confirmed_phone,omitempty"`
-	ConfirmPhoneToken  int       `json:"confirm_phone_token,omitempty"`
-	ConfirmPhoneExpiry int64     `json:"confirm_phone_expiry,omitempty"`
-	LoginEmailToken    int       `json:"login_email_token,omitempty"`
-	LoginEmailExpiry   int64     `json:"login_email_expiry,omitempty"`
-	LoginPhoneToken    int       `json:"login_phone_token,omitempty"`
-	LoginPhoneExpiry   int64     `json:"login_phone_expiry,omitempty"`
+	ConfirmPhoneToken  int       `json:"-"`
+	ConfirmPhoneExpiry int64     `json:"-"`
+	LoginEmailToken    int       `json:"-"`
+	LoginEmailExpiry   int64     `json:"-"`
+	LoginPhoneToken    int       `json:"-"`
+	LoginPhoneExpiry   int64     `json:"-"`
 	Managed            int       `json:"managed,omitempty"`
 	AccountManagerID   string    `json:"account_manager_id,omitempty"`
 	TotpSecret         string    `json:"-"`

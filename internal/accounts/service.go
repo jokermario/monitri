@@ -163,12 +163,16 @@ type ChangePasswordRequest struct {
 
 //UpdateAccountRequest represents the body of an update account request
 type UpdateAccountRequest struct {
-	Firstname  string `json:"firstname,omitempty"`
-	Middlename string `json:"middlename,omitempty"`
-	Lastname   string `json:"lastname,omitempty"`
-	Dob        string `json:"dob,omitempty"`
-	Password   string `json:"password,omitempty"`
-	Address    string `json:"address,omitempty"`
+	Firstname   string `json:"firstname"`
+	Middlename  string `json:"middlename,omitempty"`
+	Lastname    string `json:"lastname"`
+	Dob         string `json:"dob"`
+	Password    string `json:"password"`
+	Address     string `json:"address"`
+	NOKFullname string `json:"nok_fullname"`
+	NOKPhone    string `json:"nok_phone"`
+	NOKEmail    string `json:"nok_email,omitempty"`
+	NOKAddress  string `json:"nok_address"`
 }
 
 //Authorization represents the data in the authorization field returned in a Paystack response
@@ -367,13 +371,11 @@ func (uar UpdateAccountRequest) validate() error {
 		validation.Field(&uar.Lastname, validation.Required, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
 		validation.Field(&uar.Dob, validation.Required,
 			validation.Match(regexp.MustCompile(`^\d{4}-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])+$`))),
-		validation.Field(&uar.Address, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))))
-	//validation.Field(&uar.Bankname, validation.Match(regexp.MustCompile("^[a-zA-Z]+$"))),
-	//validation.Field(&uar.BankAccountNo, validation.Match(regexp.MustCompile("^[0-9]+$"))),
-	//validation.Field(&uar.ConfirmedEmail, validation.Length(1, 1), is.Int),
-	//validation.Field(&uar.ConfirmedPhone, validation.Length(1, 1), is.Int),
-	//validation.Field(&uar.Managed, validation.Length(1, 1), is.Int),
-	//validation.Field(&uar.AccountManagerID, validation.Length(36, 0)))
+		validation.Field(&uar.Address, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))),
+		validation.Field(&uar.NOKFullname, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z]+$"))),
+		validation.Field(&uar.NOKPhone, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
+		validation.Field(&uar.NOKEmail, is.Email),
+		validation.Field(&uar.NOKAddress, validation.Required, validation.Match(regexp.MustCompile("^[a-z A-Z0-9,.]+$"))))
 }
 
 func (cpr ChangePasswordRequest) validate() error {
@@ -641,6 +643,10 @@ func (s *service) updateProfile(ctx context.Context, id string, req UpdateAccoun
 	account.Lastname = strings.TrimSpace(req.Lastname)
 	account.Dob = strings.TrimSpace(req.Dob)
 	account.Address = strings.TrimSpace(req.Address)
+	account.NOKFullname = strings.TrimSpace(req.NOKFullname)
+	account.NOKPhone = strings.TrimSpace(req.NOKPhone)
+	account.NOKEmail = strings.TrimSpace(req.NOKEmail)
+	account.NOKAddress = strings.TrimSpace(req.NOKAddress)
 	account.UpdatedAt = time.Now()
 
 	if err := s.repo.AccountUpdate(ctx, account.Accounts); err != nil {

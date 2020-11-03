@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS accounts
                                 bank_name VARCHAR(100) NULL,
                                 recipient_code VARCHAR(100) NULL,
                                 current_balance INTEGER NOT NULL DEFAULT 0,    -- the current balance after the transaction
+                                nok_fullname VARCHAR (255) NULL,
+                                nok_phone VARCHAR (255) NULL,
+                                nok_email VARCHAR (255) NULL,
+                                nok_address VARCHAR (255) NULL,
                                 confirmed_email INTEGER NOT NULL DEFAULT 0,
                                 confirm_email_token INTEGER NULL,
                                 confirm_email_expiry INTEGER NULL,

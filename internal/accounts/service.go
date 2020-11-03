@@ -848,11 +848,14 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 
 	td.tokenMu.Lock()
 	defer td.tokenMu.Unlock()
+	fmt.Println(td.RefreshUUID)
 
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
 	if accerr != nil {
 		return nil, accerr
 	}
+	fmt.Println(td.AccessToken)
+
 	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUUID, td.RtExpires)
 	if referr != nil {
 		return nil, referr

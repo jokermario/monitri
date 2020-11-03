@@ -97,7 +97,7 @@ type Identity interface {
 }
 
 type service struct {
-	tokenMu                *sync.Mutex
+	tokenMu                sync.Mutex
 	repo                   Repository
 	logger                 log.Logger
 	emailService           email.Service
@@ -849,6 +849,7 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.RefreshUUID = entity.GenerateID()
 
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
+	fmt.Println(accerr)
 	if accerr != nil {
 		return nil, accerr
 	}

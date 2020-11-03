@@ -846,8 +846,8 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.AccessUUID = entity.GenerateID()
 	td.RefreshUUID = entity.GenerateID()
 
-	td.tokenMu.Lock()
-	defer td.tokenMu.Unlock()
+	//td.tokenMu.Lock()
+	//defer td.tokenMu.Unlock()
 	fmt.Println(td.RefreshUUID)
 
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)

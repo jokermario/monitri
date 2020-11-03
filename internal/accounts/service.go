@@ -317,7 +317,7 @@ type DataInPaystackGeneralResponse struct {
 	UpdatedAt        string                 `json:"updatedAt,omitempty"`
 }
 
-//PaystackGeneralResponse represents the general payload structure returned by paystack
+//PaystackGeneralResponse represents the general payload structur returned by paystack
 type PaystackGeneralResponse struct {
 	Status  bool                          `json:"status,omitempty"`
 	Message string                        `json:"message,omitempty"`
@@ -846,12 +846,18 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.AccessUUID = entity.GenerateID()
 	td.RefreshUUID = entity.GenerateID()
 
+	s.tokenMu.Lock()
 	td.AccessToken, accerr = s.generateAccessToken(identity, td.AccessUUID, td.AtExpires)
+	s.tokenMu.Unlock()
+
 	if accerr != nil {
 		return nil, accerr
 	}
 
+	s.tokenMu.Lock()
 	td.RefreshToken, referr = s.generateRefreshToken(identity, td.RefreshUUID, td.RtExpires)
+	s.tokenMu.Unlock()
+
 	if referr != nil {
 		return nil, referr
 	}
@@ -886,8 +892,6 @@ func (s *service) refreshToken(identity Identity, redisConn redis.Conn,
 
 // generateAccessToken generates a JWT that encodes an identity.
 func (s *service) generateAccessToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"authorized": true,
 		"accessUUID": tokenUUID,
@@ -900,8 +904,6 @@ func (s *service) generateAccessToken(identity Identity, tokenUUID string, expir
 
 // generateRefreshToken generates a JWT that encodes an identity used to regenerate an access token.
 func (s *service) generateRefreshToken(identity Identity, tokenUUID string, expiryTime int64) (string, error) {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"refreshUUID": tokenUUID,
 		"userId":      identity.GetID(),

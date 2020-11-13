@@ -86,6 +86,7 @@ type Service interface {
 	//get2FAType(ctx context.Context, id string) (string, bool, error)
 	setTransactionPin(ctx context.Context, id, email string, req SetPinRequest) error
 	sendEmail(ctx context.Context, email, message string) error
+	sendFundsToUsersInternal(ctx context.Context, conn redis.Conn, id string, req SendInternalFundsRequest) error
 	//flagIP(conn redis.Conn, ip string) error
 }
 
@@ -97,6 +98,18 @@ type Identity interface {
 	GetEmail() string
 	GetPhone() string
 	GetTOTPSecret() string
+	GetFirstName() string
+	GetMiddleName() string
+	GetLastName() string
+	GetDOB() string
+	GetAddress() string
+	GetBankName() string
+	GetBankAccountNo() string
+	GetCurrentBalance() int
+	GetNOKFullname() string
+	GetNOKPhone() string
+	GetNOKEmail() string
+	GetNOKAddress() string
 }
 
 type service struct {
@@ -116,6 +129,24 @@ type service struct {
 //Account represents an account entity
 type Account struct {
 	entity.Accounts
+}
+
+//AccountDetails represents an account detail
+type AccountDetails struct {
+	Firstname          string    `json:"firstname,omitempty"`
+	Middlename         string    `json:"middlename,omitempty"`
+	Lastname           string    `json:"lastname,omitempty"`
+	Dob                string    `json:"dob,omitempty"`
+	Email              string    `json:"email,omitempty"`
+	Address            string    `json:"address,omitempty"`
+	Phone              string    `json:"phone,omitempty"`
+	BankAccountNo      string    `json:"bank_account_no,omitempty"`
+	BankName           string    `json:"bank_name,omitempty"`
+	CurrentBalance     int       `json:"current_balance"`
+	NOKFullname        string    `json:"nok_fullname,omitempty"`
+	NOKPhone           string    `json:"nok_phone,omitempty"`
+	NOKEmail           string    `json:"nok_email,omitempty"`
+	NOKAddress         string    `json:"nok_address,omitempty"`
 }
 
 //Setting represents a setting entity
@@ -341,7 +372,7 @@ type SetBankDetailsRequest struct {
 
 //SetPinRequest represents the request body of a set pin request
 type SetPinRequest struct {
-	Pin string `json:"pin"`
+	Pin   string `json:"pin"`
 	Token string `json:"token"`
 }
 
@@ -349,6 +380,7 @@ type SetPinRequest struct {
 type SendInternalFundsRequest struct {
 	Amount        string `json:"amount"`
 	ReceiverPhone string `json:"receiver_phone"`
+	Description   string `json:"description"`
 	Token         string `json:"token"`
 	Pin           string `json:"pin"`
 	Reference     string `json:"reference,omitempty"`
@@ -1181,7 +1213,6 @@ func (s *service) generateAndSendPhoneToken(ctx context.Context, receiverPhone, 
 
 		ok, _ := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
 			". it expires in 10 minutes")
-		fmt.Println("here")
 		if !ok {
 			logger.Errorf("an error occurred while trying to send token to mobile")
 			return nil
@@ -1661,7 +1692,6 @@ func (s *service) setTransactionPin(ctx context.Context, id, email string, req S
 	return nil
 }
 
-
 func (s *service) sendEmail(ctx context.Context, email, message string) error {
 	logger := s.logger.With(ctx, "account", email)
 
@@ -1680,7 +1710,6 @@ func (s *service) sendEmail(ctx context.Context, email, message string) error {
 	}
 	return nil
 }
-
 
 //-------------------------------------------------TRANSACTION FUNCTIONS------------------------------------------------
 
@@ -1814,6 +1843,7 @@ func (s *service) initiateAddFundsTransaction(ctx context.Context, id string, re
 		dataa, _ := ioutil.ReadAll(resp.Body)
 		defer resp.Body.Close()
 
+		//todo put a mutex lock
 		var responsePayload *PaystackGeneralResponse
 		_ = json.Unmarshal(dataa, &responsePayload)
 		respJSON, err := json.Marshal(responsePayload)
@@ -1830,61 +1860,81 @@ func (s *service) initiateAddFundsTransaction(ctx context.Context, id string, re
 	return nil, errors.BadRequest("")
 }
 
-//func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn, id string, req SendInternalFundsRequest) error {
-//	logger := s.logger.With(ctx, "account", req.ReceiverPhone)
-//	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
-//
-//	transId := entity.GenerateID()
-//	req.Reference = strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(RandomCrypto.Int64()))
-//
-//	if err := s.repo.SetRedisKey(conn, 180, transId, req.Reference); err != nil {
-//		logger.Errorf("An error occurred while to save the transaction id in redis")
-//		return err
-//	}
-//
-//	//Receivers account
-//	racct, err := s.getAccountByPhone(ctx, req.ReceiverPhone)
-//	if err != nil {
-//		logger.Errorf("An error occurred while to retrieve receivers account with phone")
-//		return err
-//	}
-//
-//	//Senders account
-//	sacct, err := s.getAccountByID(ctx, id)
-//	if err != nil {
-//		logger.Errorf("An error occurred while to retrieve senders account with phone")
-//		return err
-//	}
-//
-//	//todo stopped while thinking i should use the updateTrans function.
-//	convertAmountToInt, err := strconv.Atoi(req.Amount)
-//	if err != nil {
-//		logger.Errorf("An error occurred while to convert the amount to string")
-//		return err
-//	}
-//	sendersBalance := sacct.CurrentBalance - convertAmountToInt
-//	receiversBalance := racct.CurrentBalance + convertAmountToInt
-//
-//	sacct.CurrentBalance = sendersBalance
-//	racct.CurrentBalance = receiversBalance
-//
-//	dbId := entity.GenerateID()
-//
-//	updateErr := s.repo.updateTwoAccountAndTransactionTableTrans(ctx, sacct.Accounts, racct.Accounts, entity.Transactions{
-//		ID: dbId,
-//		AccountID:     accID,
-//		TransactionID: transRef,
-//		Status:        "pending",
-//	})
-//	ok, _ := s.phoneVeriService.SendSMSToMobile(receiverPhone, "Your verification token is "+tokenToString+
-//	". it expires in 10 minutes")
-//	fmt.Println("here")
-//	if !ok {
-//	logger.Errorf("an error occurred while trying to send token to mobile")
-//	return nil
-//	}
-//
-//}
+func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn, id string, req SendInternalFundsRequest) error {
+	logger := s.logger.With(ctx, "account", req.ReceiverPhone)
+	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
+
+	transId := entity.GenerateID()
+	req.Reference = strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(RandomCrypto.Int64()))
+
+	//idempotency. Store the transactionId in redis
+	if err := s.repo.SetRedisKey(conn, 180, transId, req.Reference); err != nil {
+		logger.Errorf("An error occurred while to save the transaction id in redis")
+		return err
+	}
+
+	//Receivers account
+	racct, err := s.getAccountByPhone(ctx, req.ReceiverPhone)
+	if err != nil {
+		logger.Errorf("An error occurred while to retrieve receivers account with phone")
+		return err
+	}
+
+	//Senders account
+	sacct, err := s.getAccountByID(ctx, id)
+	if err != nil {
+		logger.Errorf("An error occurred while to retrieve senders account with phone")
+		return err
+	}
+
+	convertAmountToInt, err := strconv.Atoi(req.Amount)
+	if err != nil {
+		logger.Errorf("An error occurred while to convert the amount to string")
+		return err
+	}
+	sendersBalance := sacct.CurrentBalance - convertAmountToInt
+	receiversBalance := racct.CurrentBalance + convertAmountToInt
+
+	sacct.CurrentBalance = sendersBalance
+	racct.CurrentBalance = receiversBalance
+
+	dbId := entity.GenerateID()
+
+	updateErr := s.repo.updateTwoAccountAndTransactionTableTrans(ctx, sacct.Accounts, racct.Accounts, entity.Transactions{
+		ID:            dbId,
+		AccountID:     sacct.ID,
+		TransactionID: req.Reference,
+		Amount:        convertAmountToInt,
+		Currency:      "NGN",
+		Description:   req.Description,
+		RecipientEmail: racct.Email,
+		RecipientPhone: racct.Phone,
+		Status:        "debit",
+	})
+	if updateErr != nil {
+		logger.Errorf("An error occurred while to update the database during an internal transfer")
+		return err
+	}
+
+	amountToNaira := convertAmountToInt / 100
+	am := strconv.Itoa(amountToNaira)
+	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "You have received "+am+ ", in your monitri platform")
+	if !ok {
+		logger.Errorf("an error occurred while trying to send alert to receiver")
+		return nil
+	}
+
+	err = s.sendEmail(ctx, sacct.Email, "Your request to send "+am+" to "+racct.Phone+" has been processed.")
+	if err != nil {
+		logger.Errorf("An error occurred while to alert to sender")
+		return err
+	}
+
+	//release the transactionId from redis
+	_ = s.repo.DeleteRedisKeys(conn, transId)
+
+	return nil
+}
 
 //----------------------------------------------------REDIS FUNCTIONS---------------------------------------------------
 

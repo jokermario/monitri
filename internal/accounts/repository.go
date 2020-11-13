@@ -35,7 +35,7 @@ type Repository interface {
 	//GetLatestTransaction(ctx context.Context, accountId string) (entity.Transactions, error)
 	updateAccountAndTransactionTableTrans(ctx context.Context, accounts entity.Accounts, transactions entity.Transactions) error
 	updateTwoAccountAndTransactionTableTrans(ctx context.Context, accounts entity.Accounts,
-		accounts2 entity.Accounts, transactions entity.Transactions, transactions2 entity.Transactions) error
+		accounts2 entity.Accounts, transactions entity.Transactions) error
 }
 
 type repository struct {
@@ -245,7 +245,7 @@ func (r *repository) updateAccountAndTransactionTableTrans(ctx context.Context, 
 }
 
 func (r *repository) updateTwoAccountAndTransactionTableTrans(ctx context.Context, accounts entity.Accounts,
-	accounts2 entity.Accounts, transactions entity.Transactions, transactions2 entity.Transactions) error {
+	accounts2 entity.Accounts, transactions entity.Transactions) error {
 
 	if err := r.db.Transactional(ctx, func(ctx context.Context) error {
 		if accUpdateErr := r.db.With(ctx).Model(&accounts).Update(); accUpdateErr != nil {
@@ -256,9 +256,6 @@ func (r *repository) updateTwoAccountAndTransactionTableTrans(ctx context.Contex
 		}
 		if transUpdateErr := r.db.With(ctx).Model(&transactions).Insert(); transUpdateErr != nil {
 			return transUpdateErr
-		}
-		if transUpdate2Err := r.db.With(ctx).Model(&transactions2).Insert(); transUpdate2Err != nil {
-			return transUpdate2Err
 		}
 		return nil
 	}); err != nil {

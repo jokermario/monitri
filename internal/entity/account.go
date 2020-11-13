@@ -114,3 +114,28 @@ func (a Accounts) GetBankName() string {
 func (a Accounts) GetBankAccountNo() string {
 	return a.BankAccountNo
 }
+
+// GetBankAccountNo returns the accounts bankAcctNo.
+func (a Accounts) GetCurrentBalance() int {
+	return a.CurrentBalance
+}
+
+// GetBankAccountNo returns the accounts bankAcctNo.
+func (a Accounts) GetNOKFullname() string {
+	return a.NOKFullname
+}
+
+// GetBankAccountNo returns the accounts bankAcctNo.
+func (a Accounts) GetNOKPhone() string {
+	return a.NOKPhone
+}
+
+// GetBankAccountNo returns the accounts bankAcctNo.
+func (a Accounts) GetNOKEmail() string {
+	return a.NOKEmail
+}
+
+// GetBankAccountNo returns the accounts bankAcctNo.
+func (a Accounts) GetNOKAddress() string {
+	return a.NOKAddress
+}

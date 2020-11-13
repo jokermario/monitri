@@ -61,6 +61,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("/transaction/initialize", res.initiatedTransaction)
+	r.Post("/transaction/sendmoney/internal", res.sendMoneyInternal)
 }
 
 type resource struct {
@@ -96,6 +97,7 @@ func (r resource) getNigerianBanks(rc *routing.Context) error {
 	}
 	var data *responseData
 	_ = json.Unmarshal(b, &data)
+	data.Status = "success"
 	return rc.WriteWithStatus(data, http.StatusOK)
 }
 
@@ -154,7 +156,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.unset2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"))
 	if err != nil {
-		if err == errors.InternalServerError("settingsNotExist"){
+		if err == errors.InternalServerError("settingsNotExist") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -162,7 +164,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"2FA has not been set",
 			}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("passcodeErr"){
+		} else if err == errors.InternalServerError("passcodeErr") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -170,7 +172,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"The passcode is not valid",
 			}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("TokenInvalid") {
+		} else if err == errors.InternalServerError("TokenInvalid") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -178,7 +180,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"The token is invalid",
 			}, http.StatusInternalServerError)
-		}else {
+		} else {
 			return errors.InternalServerError("An error occurred")
 		}
 	}
@@ -203,7 +205,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 
 	err := r.service.setBankDetails(rc.Request.Context(), identity.GetEmail(), input)
 	if err != nil {
-		if err == errors.InternalServerError("settingsNotExist"){
+		if err == errors.InternalServerError("settingsNotExist") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -211,7 +213,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"2FA has not been set",
 			}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("passcodeErr"){
+		} else if err == errors.InternalServerError("passcodeErr") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -219,7 +221,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"The passcode is not valid",
 			}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("TokenInvalid") {
+		} else if err == errors.InternalServerError("TokenInvalid") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -227,7 +229,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"The token is invalid",
 			}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("2FAMustBeSet") {
+		} else if err == errors.InternalServerError("2FAMustBeSet") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -235,7 +237,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"A 2FA must be set for the account",
 			}, http.StatusInternalServerError)
-		}else {
+		} else {
 			return errors.InternalServerError("An error occurred")
 		}
 	}
@@ -300,13 +302,30 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			vComp = "yes"
 		}
 
+		//var d AccountDetails
+		//d.Firstname = ide
+		//d.Middlename =
+		//d.Lastname =
+		//d.Dob =
+		//d.Phone =
+		//d.Address =
+		//d.Email =
+		//d.BankName =
+		//d.CurrentBalance =
+		//d.BankAccountNo =
+		//d.NOKFullname =
+		//d.NOKPhone =
+		//d.NOKEmail =
+		//d.NOKAddress =
+
 		type data struct {
 			//TokenType    string `json:"token_type"`
-			Email                 string `json:"email"`
-			CompletedVerification string `json:"completed_verification"`
-			AccessToken           string `json:"access_token"`
-			ExpiryTime            int64  `json:"expires"`
-			RefreshToken          string `json:"refresh_token"`
+			Email                 string         `json:"email"`
+			//AccountInfo           AccountDetails `json:"account_info"`
+			CompletedVerification string         `json:"completed_verification"`
+			AccessToken           string         `json:"access_token"`
+			ExpiryTime            int64          `json:"expires"`
+			RefreshToken          string         `json:"refresh_token"`
 		}
 		return c.Write(struct {
 			Status  string `json:"status"`
@@ -873,7 +892,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 						return errors2.New("failed to update the transaction and current balance")
 					}
 					nairaAmount := payloadHold.Data.Amount / 100
-					message := "Your account has been funded with "+strconv.Itoa(nairaAmount)
+					message := "Your account has been funded with " + strconv.Itoa(nairaAmount)
 					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}
@@ -892,7 +911,7 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	}
 	b, err := r.service.initiateAddFundsTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
-		if err == errors.InternalServerError("VeriErr"){
+		if err == errors.InternalServerError("VeriErr") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -916,4 +935,25 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	var dta *dataToReturn
 	_ = json.Unmarshal(b, &dta)
 	return rc.WriteWithStatus(dta, http.StatusOK)
+}
+
+func (r resource) sendMoneyInternal(rc *routing.Context) error {
+	var req SendInternalFundsRequest
+	if err := rc.Read(&req); err != nil {
+		return errors.BadRequest("cannot read request")
+	}
+
+	identity := CurrentAccount(rc.Request.Context())
+	err := r.service.sendFundsToUsersInternal(rc.Request.Context(), r.redisConn, identity.GetID(), req)
+	if err != nil {
+		return rc.WriteWithStatus(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		}{"failed", "an error occurred"}, http.StatusInternalServerError)
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "processed successfully"}, http.StatusInternalServerError)
 }

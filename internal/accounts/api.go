@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,9 +54,10 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/verified", res.checkAccountVerificationStatus)
 	r.Post("/list/banks", res.getNigerianBanks)
 	r.Post("/verify/bankaccount/<bankCode>/<acctNo>", res.verifyBankAccountNumber)
-	r.Post("/get/2fatype", res.get2FAType)
+	//r.Post("/get/2fatype", res.get2FAType)
 	r.Post("/account/unset2fa/<passcode>/<authType>", res.unset2FA)
-	r.Post("/account/bankdetails/<passcode>/<authType>", res.setBankDetails)
+	r.Post("/account/bankdetails", res.setBankDetails)
+	r.Post("/account/setuppin", res.setTransactionPin)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("/transaction/initialize", res.initiatedTransaction)
@@ -115,37 +117,38 @@ func (r resource) verifyBankAccountNumber(rc *routing.Context) error {
 	return rc.WriteWithStatus(data, http.StatusOK)
 }
 
-func (r resource) get2FAType(rc *routing.Context) error {
-	identity := CurrentAccount(rc.Request.Context())
-	authType, _, err := r.service.get2FAType(rc.Request.Context(), identity.GetID())
-	if err != nil {
-		if err == errors.InternalServerError("2FANotSet"){
-			return rc.WriteWithStatus(struct {
-				Status  string `json:"status"`
-				Message string `json:"message"`
-			}{
-				"failed",
-				"No 2FA has been set for this account",
-			}, http.StatusInternalServerError)
-		}
-
-		return errors.InternalServerError("An error occurred")
-	}
-	type data struct {
-		AuthType string `json:"auth_type"`
-	}
-	return rc.WriteWithStatus(struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
-		Data    data   `json:"data"`
-	}{
-		"success",
-		"The auth type has been retrieved",
-		data{
-			authType,
-		},
-	}, http.StatusOK)
-}
+//deprecated
+//func (r resource) get2FAType(rc *routing.Context) error {
+//	identity := CurrentAccount(rc.Request.Context())
+//	authType, _, err := r.service.get2FAType(rc.Request.Context(), identity.GetID())
+//	if err != nil {
+//		if err == errors.InternalServerError("2FANotSet"){
+//			return rc.WriteWithStatus(struct {
+//				Status  string `json:"status"`
+//				Message string `json:"message"`
+//			}{
+//				"failed",
+//				"No 2FA has been set for this account",
+//			}, http.StatusInternalServerError)
+//		}
+//
+//		return errors.InternalServerError("An error occurred")
+//	}
+//	type data struct {
+//		AuthType string `json:"auth_type"`
+//	}
+//	return rc.WriteWithStatus(struct {
+//		Status  string `json:"status"`
+//		Message string `json:"message"`
+//		Data    data   `json:"data"`
+//	}{
+//		"success",
+//		"The auth type has been retrieved",
+//		data{
+//			authType,
+//		},
+//	}, http.StatusOK)
+//}
 
 func (r resource) unset2FA(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
@@ -197,7 +200,8 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 	}
 
 	identity := CurrentAccount(rc.Request.Context())
-	err := r.service.setBankDetails(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"), input)
+
+	err := r.service.setBankDetails(rc.Request.Context(), identity.GetEmail(), input)
 	if err != nil {
 		if err == errors.InternalServerError("settingsNotExist"){
 			return rc.WriteWithStatus(struct {
@@ -636,7 +640,7 @@ func (r resource) sendEmailVeriToken(rc *routing.Context) error {
 		return errors.BadRequest("invalid request. Cannot read the request")
 	}
 
-	err := r.service.generateAndSendEmailToken(rc.Request.Context(), req, rc.Param("purpose"))
+	err := r.service.generateAndSendEmailTokenExternal(rc.Request.Context(), req, rc.Param("purpose"))
 	if err != nil {
 		if err == errors.Unauthorized("") {
 			return errors.Unauthorized("")
@@ -783,6 +787,28 @@ func (r resource) checkAccountVerificationStatus(rc *routing.Context) error {
 	}{"success", "completed"}, http.StatusOK)
 }
 
+func (r resource) setTransactionPin(rc *routing.Context) error {
+	var req SetPinRequest
+
+	if err := rc.Read(&req); err != nil {
+		return errors.BadRequest("cannot read request")
+	}
+
+	identity := CurrentAccount(rc.Request.Context())
+	if err := r.service.setTransactionPin(rc.Request.Context(), identity.GetID(),
+		identity.GetEmail(), req); err != nil {
+		return rc.WriteWithStatus(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		}{"failed", err.Error()}, http.StatusOK)
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}{"success", "pin set successfully"}, http.StatusOK)
+}
+
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
 func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handler {
@@ -831,7 +857,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 					return errors2.New("failed to retrieve account")
 				}
 
-				//now we get the balance of the last transaction so as to help us increment or decrement as necessary
+				//increment the current balance
 				currentBalance := acct.CurrentBalance + payloadHold.Data.Amount
 
 				if payloadHold.Data.Status != "success" {
@@ -846,6 +872,9 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 						logger.Errorf("failed to update the transaction and current balance: %s", err)
 						return errors2.New("failed to update the transaction and current balance")
 					}
+					nairaAmount := payloadHold.Data.Amount / 100
+					message := "Your account has been funded with "+strconv.Itoa(nairaAmount)
+					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}
 			}
@@ -861,7 +890,7 @@ func (r resource) initiatedTransaction(rc *routing.Context) error {
 	if err := rc.Read(&input); err != nil {
 		return errors.BadRequest("problems occurred reading the payload")
 	}
-	b, err := r.service.initiateTransaction(rc.Request.Context(), identity.GetID(), input)
+	b, err := r.service.initiateAddFundsTransaction(rc.Request.Context(), identity.GetID(), input)
 	if err != nil {
 		if err == errors.InternalServerError("VeriErr"){
 			return rc.WriteWithStatus(struct {

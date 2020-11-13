@@ -21,6 +21,10 @@
   <component name="ChangeListManager">
     <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/api.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/api.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/middleware.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/middleware.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/repository.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/repository.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/accounts/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/service.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/entity/account.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/account.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/migrations/db_tables.sql" beforeDir="false" afterPath="$PROJECT_DIR$/migrations/db_tables.sql" afterDir="false" />
     </list>
@@ -258,11 +262,11 @@
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="47" width="1096" height="746" maximized="true" key="dock-window-5/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1599671155981" />
-    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1604382096945">
+    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6" timestamp="1605177465673">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="-1080" y="0" width="1096" height="1088" maximized="true" key="dock-window-6/-1080.0.1080.1920/0.0.1920.1080/-3000.0.1920.1080@-3000.0.1920.1080" timestamp="1599681446239" />
-    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604382096945" />
+    <state x="461" y="371" width="617" height="612" maximized="true" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1605177465673" />
     <state x="461" y="371" width="617" height="612" key="dock-window-6/-1920.0.1920.1080/0.0.1920.1080@0.0.1920.1080" timestamp="1604346656452" />
     <state x="-26" y="-17" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-1080.0.1080.1920" timestamp="1600175586989" />
     <state x="-1448" y="-19" width="1920" height="612" maximized="true" key="dock-window-6/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@-3000.0.1920.1080" timestamp="1600447334737" />

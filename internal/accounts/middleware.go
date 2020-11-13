@@ -141,7 +141,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 		return nil
 	}
 	if refHeader != "" {
-		//generate new access token, store it in redis and delete the old one
+		//generate new refresh token, store it in redis and delete the old one
 		val, _ := service2.checkIfKeyExist(conn, token.Claims.(jwt.MapClaims)["refreshUUID"].(string))
 		if val == "" {
 			return errors.Unauthorized("refresh token expired")

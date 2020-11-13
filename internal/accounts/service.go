@@ -449,7 +449,8 @@ func (sifr SendInternalFundsRequest) validate() error {
 	return validation.ValidateStruct(&sifr,
 		validation.Field(&sifr.ReceiverPhone, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 		validation.Field(&sifr.Token, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
-		validation.Field(&sifr.Pin, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))))
+		validation.Field(&sifr.Pin, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
+		validation.Field(&sifr.Description, validation.Required))
 }
 
 func (spr SetPinRequest) validate() error {

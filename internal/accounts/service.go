@@ -373,7 +373,6 @@ type SetBankDetailsRequest struct {
 //SetPinRequest represents the request body of a set pin request
 type SetPinRequest struct {
 	Pin   string `json:"pin"`
-	Token string `json:"token"`
 }
 
 //SendInternalFundsRequest represents the request body of a send internal funds request

@@ -1018,10 +1018,7 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 				Message string `json:"message"`
 			}{"failed", "Transaction pin mismatch"}, http.StatusInternalServerError)
 		}
-		return rc.WriteWithStatus(struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		}{"failed", "an error occurred"}, http.StatusInternalServerError)
+		return err
 	}
 
 	return rc.WriteWithStatus(struct {

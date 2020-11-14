@@ -1939,13 +1939,13 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	amountToNaira := convertAmountToInt / 100
 	currentBalanceToString := strconv.Itoa(racct.CurrentBalance / 100)
 	am := strconv.Itoa(amountToNaira)
-	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "Monitri\n\nAcctNo: "+racct.Phone+"\nAmount: NGN"+am+" CR\nDesc: From "+sacct.Firstname+" "+sacct.Lastname+"\nTran-id: "+req.Reference+"\nBal: "+currentBalanceToString)
+	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "Monitri\n\nAcctNo: "+racct.Phone+"\nAmount: NGN"+am+".00 CR\nDesc: From "+sacct.Firstname+" "+sacct.Lastname+"\nTran-id: "+req.Reference+"\nBal: NGN"+currentBalanceToString+".00")
 	if !ok {
 		logger.Errorf("an error occurred while trying to send alert to receiver")
 		return nil
 	}
 
-	err = s.sendEmail(ctx, sacct.Email, "Your request to send ₦"+am+" to "+racct.Phone+" has been processed.")
+	err = s.sendEmail(ctx, sacct.Email, "Your request to send ₦"+am+".00 to "+racct.Phone+" has been processed.")
 	if err != nil {
 		logger.Errorf("An error occurred while to alert to sender")
 		return err

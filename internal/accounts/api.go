@@ -958,7 +958,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 						return errors2.New("failed to update the transaction and current balance")
 					}
 					nairaAmount := payloadHold.Data.Amount / 100
-					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount)+"."
+					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount)+".00, "
 					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}

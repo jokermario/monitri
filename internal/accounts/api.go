@@ -302,26 +302,34 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			vComp = "yes"
 		}
 
-		//var d AccountDetails
-		//d.Firstname = ide
-		//d.Middlename =
-		//d.Lastname =
-		//d.Dob =
-		//d.Phone =
-		//d.Address =
-		//d.Email =
-		//d.BankName =
-		//d.CurrentBalance =
-		//d.BankAccountNo =
-		//d.NOKFullname =
-		//d.NOKPhone =
-		//d.NOKEmail =
-		//d.NOKAddress =
+		acct, err := r.service.getAccountByEmail(c.Request.Context(), req.Email)
+		if err != nil {
+			return c.Write(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "Account info failed. The error: "+ err.Error()})
+		}
+
+		var accountDetails AccountDetails
+		accountDetails.Firstname = acct.Firstname
+		accountDetails.Middlename = acct.Middlename
+		accountDetails.Lastname = acct.Lastname
+		accountDetails.Dob = acct.Dob
+		accountDetails.Phone = acct.Phone
+		accountDetails.Address = acct.Address
+		accountDetails.Email = acct.Email
+		accountDetails.BankName = acct.BankName
+		accountDetails.BankAccountNo = acct.BankAccountNo
+		accountDetails.CurrentBalance = acct.CurrentBalance
+		accountDetails.NOKFullname = acct.NOKFullname
+		accountDetails.NOKPhone = acct.NOKPhone
+		accountDetails.NOKEmail = acct.NOKEmail
+		accountDetails.NOKAddress = acct.NOKAddress
 
 		type data struct {
 			//TokenType    string `json:"token_type"`
 			Email                 string         `json:"email"`
-			//AccountInfo           AccountDetails `json:"account_info"`
+			AccountInfo           AccountDetails `json:"account_info"`
 			CompletedVerification string         `json:"completed_verification"`
 			AccessToken           string         `json:"access_token"`
 			ExpiryTime            int64          `json:"expires"`
@@ -331,7 +339,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, accountDetails, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken)}})
 	}
 }

@@ -81,7 +81,7 @@ type Service interface {
 	initiateAddFundsTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error)
 	getBanks(ctx context.Context) ([]byte, error)
 	verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo string) ([]byte, bool, error)
-	setBankDetails(ctx context.Context, email string, req SetBankDetailsRequest) error
+	setBankDetails(ctx context.Context, email string, req SetBankDetailsRequest) (string, string, error)
 	unset2FA(ctx context.Context, id, email, passcode, authType string) error
 	//get2FAType(ctx context.Context, id string) (string, bool, error)
 	setTransactionPin(ctx context.Context, id, email string, req SetPinRequest) error
@@ -133,20 +133,20 @@ type Account struct {
 
 //AccountDetails represents an account detail
 type AccountDetails struct {
-	Firstname          string    `json:"firstname,omitempty"`
-	Middlename         string    `json:"middlename,omitempty"`
-	Lastname           string    `json:"lastname,omitempty"`
-	Dob                string    `json:"dob,omitempty"`
-	Email              string    `json:"email,omitempty"`
-	Address            string    `json:"address,omitempty"`
-	Phone              string    `json:"phone,omitempty"`
-	BankAccountNo      string    `json:"bank_account_no,omitempty"`
-	BankName           string    `json:"bank_name,omitempty"`
-	CurrentBalance     int       `json:"current_balance"`
-	NOKFullname        string    `json:"nok_fullname,omitempty"`
-	NOKPhone           string    `json:"nok_phone,omitempty"`
-	NOKEmail           string    `json:"nok_email,omitempty"`
-	NOKAddress         string    `json:"nok_address,omitempty"`
+	Firstname      string `json:"firstname,omitempty"`
+	Middlename     string `json:"middlename,omitempty"`
+	Lastname       string `json:"lastname,omitempty"`
+	Dob            string `json:"dob,omitempty"`
+	Email          string `json:"email,omitempty"`
+	Address        string `json:"address,omitempty"`
+	Phone          string `json:"phone,omitempty"`
+	BankAccountNo  string `json:"bank_account_no,omitempty"`
+	BankName       string `json:"bank_name,omitempty"`
+	CurrentBalance int    `json:"current_balance"`
+	NOKFullname    string `json:"nok_fullname,omitempty"`
+	NOKPhone       string `json:"nok_phone,omitempty"`
+	NOKEmail       string `json:"nok_email,omitempty"`
+	NOKAddress     string `json:"nok_address,omitempty"`
 }
 
 //Setting represents a setting entity
@@ -372,7 +372,7 @@ type SetBankDetailsRequest struct {
 
 //SetPinRequest represents the request body of a set pin request
 type SetPinRequest struct {
-	Pin   string `json:"pin"`
+	Pin string `json:"pin"`
 }
 
 //SendInternalFundsRequest represents the request body of a send internal funds request
@@ -380,7 +380,6 @@ type SendInternalFundsRequest struct {
 	Amount        string `json:"amount"`
 	ReceiverPhone string `json:"receiver_phone"`
 	Description   string `json:"description"`
-	Token         string `json:"token"`
 	Pin           string `json:"pin"`
 	Reference     string `json:"reference,omitempty"`
 }
@@ -446,8 +445,8 @@ func (sbdr SetBankDetailsRequest) validate() error {
 
 func (sifr SendInternalFundsRequest) validate() error {
 	return validation.ValidateStruct(&sifr,
+		validation.Field(&sifr.Amount, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 		validation.Field(&sifr.ReceiverPhone, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
-		validation.Field(&sifr.Token, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 		validation.Field(&sifr.Pin, validation.Required, validation.Match(regexp.MustCompile("^[0-9]+$"))),
 		validation.Field(&sifr.Description, validation.Required))
 }
@@ -1495,28 +1494,28 @@ func (s *service) verifyBankAcctNo(ctx context.Context, bankCode, bankAcctNo str
 	return nil, false, errors.InternalServerError("An unhandled error occurred")
 }
 
-func (s *service) setBankDetails(ctx context.Context, email string, req SetBankDetailsRequest) error {
+func (s *service) setBankDetails(ctx context.Context, email string, req SetBankDetailsRequest) (string, string, error) {
 	logger := s.logger.With(ctx, "account", email)
 	if err := req.validate(); err != nil {
-		return err
+		return "", "", err
 	}
 
 	_, ok, err := s.verifyBankAcctNo(ctx, req.BankCode, req.AccountNumber)
 	if !ok {
 		logger.Error("An error occurred while trying to verify the account number")
-		return err
+		return "", "", err
 	}
 
 	_, ok, _ = s.completedVerification(ctx, email)
 	if !ok {
 		logger.Error("Must verify email, phone and update profile before you continue")
-		return errors.InternalServerError("Must verify email, phone and update profile before you continue")
+		return "", "", errors.InternalServerError("Must verify email, phone and update profile before you continue")
 	}
 
 	acct, err := s.getAccountByEmail(ctx, email)
 	if err != nil {
 		logger.Errorf("An error occurred while trying to get the account with email. The error is: %s", err)
-		return err
+		return "", "", err
 	}
 
 	req.Type = "nuban"
@@ -1525,7 +1524,7 @@ func (s *service) setBankDetails(ctx context.Context, email string, req SetBankD
 	b, err := json.Marshal(req)
 	if err != nil {
 		logger.Errorf("An error occurred while trying to convert the request struct to json. Error msg is: %s", err)
-		return err
+		return "", "", err
 	}
 
 	u, _ := url.ParseRequestURI(s.PaystackURL)
@@ -1538,7 +1537,7 @@ func (s *service) setBankDetails(ctx context.Context, email string, req SetBankD
 	resp, err := http.DefaultClient.Do(request)
 	if err != nil {
 		logger.Errorf("Error:", err)
-		return err
+		return "", "", err
 	}
 
 	if resp.StatusCode == 201 {
@@ -1556,10 +1555,11 @@ func (s *service) setBankDetails(ctx context.Context, email string, req SetBankD
 		updateErr := s.repo.AccountUpdate(ctx, acct.Accounts)
 		if updateErr != nil {
 			logger.Errorf("An error occurred while trying to update the user account. The error is: %s", updateErr)
-			return updateErr
+			return "", "", updateErr
 		}
+		return responsePayload.Data.Details["bank_name"].(string), responsePayload.Data.Details["account_number"].(string), nil
 	}
-	return nil
+	return "", "", nil
 }
 
 func (s *service) unset2FA(ctx context.Context, id, email, passcode, authType string) error {
@@ -1885,6 +1885,17 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		logger.Errorf("An error occurred while to retrieve senders account with phone")
 		return err
 	}
+	//validate the transaction pin
+	if err := bcrypt.CompareHashAndPassword([]byte(sacct.TransactionPin), []byte(req.Pin)); err != nil {
+		switch err {
+		case bcrypt.ErrMismatchedHashAndPassword:
+			logger.Errorf("The transaction pin does not match")
+			return errors.InternalServerError("TransPinMismatch")
+		default:
+			logger.Errorf("an error occurred while tyring to compare bcrypt trans pin with input trans pin")
+			return err
+		}
+	}
 
 	convertAmountToInt, err := strconv.Atoi(req.Amount)
 	if err != nil {
@@ -1900,15 +1911,15 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	dbId := entity.GenerateID()
 
 	updateErr := s.repo.updateTwoAccountAndTransactionTableTrans(ctx, sacct.Accounts, racct.Accounts, entity.Transactions{
-		ID:            dbId,
-		AccountID:     sacct.ID,
-		TransactionID: req.Reference,
-		Amount:        convertAmountToInt,
-		Currency:      "NGN",
-		Description:   req.Description,
+		ID:             dbId,
+		AccountID:      sacct.ID,
+		TransactionID:  req.Reference,
+		Amount:         convertAmountToInt,
+		Currency:       "NGN",
+		Description:    req.Description,
 		RecipientEmail: racct.Email,
 		RecipientPhone: racct.Phone,
-		Status:        "debit",
+		Status:         "debit",
 	})
 	if updateErr != nil {
 		logger.Errorf("An error occurred while to update the database during an internal transfer")
@@ -1917,7 +1928,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 
 	amountToNaira := convertAmountToInt / 100
 	am := strconv.Itoa(amountToNaira)
-	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "You have received "+am+ ", in your monitri platform")
+	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "You have received "+am+", in your monitri platform")
 	if !ok {
 		logger.Errorf("an error occurred while trying to send alert to receiver")
 		return nil
@@ -1929,7 +1940,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		return err
 	}
 
-	//release the transactionId from redis
+	// release the transactionId from redis
 	_ = s.repo.DeleteRedisKeys(conn, transId)
 
 	return nil

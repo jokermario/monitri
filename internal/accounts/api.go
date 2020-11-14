@@ -203,7 +203,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 
 	identity := CurrentAccount(rc.Request.Context())
 
-	err := r.service.setBankDetails(rc.Request.Context(), identity.GetEmail(), input)
+	bankName, acctNo, err := r.service.setBankDetails(rc.Request.Context(), identity.GetEmail(), input)
 	if err != nil {
 		if err == errors.InternalServerError("settingsNotExist") {
 			return rc.WriteWithStatus(struct {
@@ -242,12 +242,19 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 		}
 	}
 
+	type data struct {
+		BankName string `json:"bank_name,omitempty"`
+		AcctNo   string `json:"acct_no,omitempty"`
+	}
+
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
+		Data    data   `json:"data"`
 	}{
 		"success",
 		"Bank details have been set successfully",
+		data{bankName, acctNo},
 	}, http.StatusOK)
 }
 
@@ -307,7 +314,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			return c.Write(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-			}{"failed", "Account info failed. The error: "+ err.Error()})
+			}{"failed", "Account info failed. The error: " + err.Error()})
 		}
 
 		var accountDetails AccountDetails
@@ -339,7 +346,7 @@ func (r resource) login(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken), accountDetails}})
 	}
 }
@@ -389,7 +396,7 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			return c.Write(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-			}{"failed", "Account info failed. The error: "+ err.Error()})
+			}{"failed", "Account info failed. The error: " + err.Error()})
 		}
 
 		var accountDetails AccountDetails
@@ -421,7 +428,7 @@ func (r resource) LoginWithMobile2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken), accountDetails}})
 	}
 }
@@ -472,7 +479,7 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			return c.Write(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-			}{"failed", "Account info failed. The error: "+ err.Error()})
+			}{"failed", "Account info failed. The error: " + err.Error()})
 		}
 
 		var accountDetails AccountDetails
@@ -504,7 +511,7 @@ func (r resource) LoginWithEmail2FA(logger log.Logger) routing.Handler {
 			Status  string `json:"status"`
 			Message string `json:"message"`
 			Data    data   `json:"data,omitempty"`
-		}{"success", "tokens generated", data{req.Email,vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
+		}{"success", "tokens generated", data{req.Email, vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
 			hex.EncodeToString(encRefreshToken), accountDetails}})
 	}
 }
@@ -1005,6 +1012,12 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.sendFundsToUsersInternal(rc.Request.Context(), r.redisConn, identity.GetID(), req)
 	if err != nil {
+		if err == errors.InternalServerError("TransPinMismatch") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "Transaction pin mismatch"}, http.StatusInternalServerError)
+		}
 		return rc.WriteWithStatus(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`

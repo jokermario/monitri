@@ -85,7 +85,7 @@ type Service interface {
 	unset2FA(ctx context.Context, id, email, passcode, authType string) error
 	//get2FAType(ctx context.Context, id string) (string, bool, error)
 	setTransactionPin(ctx context.Context, id, email string, req SetPinRequest) error
-	sendEmail(ctx context.Context, email, message string) error
+	sendEmail(ctx context.Context, email, subject, message string) error
 	sendFundsToUsersInternal(ctx context.Context, conn redis.Conn, id string, req SendInternalFundsRequest) error
 	//flagIP(conn redis.Conn, ip string) error
 }
@@ -1691,7 +1691,7 @@ func (s *service) setTransactionPin(ctx context.Context, id, email string, req S
 	return nil
 }
 
-func (s *service) sendEmail(ctx context.Context, email, message string) error {
+func (s *service) sendEmail(ctx context.Context, email, subject, message string) error {
 	logger := s.logger.With(ctx, "account", email)
 
 	t, _ := template.ParseFiles("internal/email/securityAlertEmailTemplate.gohtml")
@@ -1702,7 +1702,7 @@ func (s *service) sendEmail(ctx context.Context, email, message string) error {
 		Message: message,
 	})
 	contentToString := body.String()
-	sendmailErr := s.emailService.SendEmail(email, "2FA Authorised", contentToString)
+	sendmailErr := s.emailService.SendEmail(email, subject, contentToString)
 	if sendmailErr != nil {
 		logger.Errorf("an error occurred while trying to send email.\nThe error: %s", sendmailErr)
 		return sendmailErr
@@ -1945,7 +1945,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		return nil
 	}
 
-	err = s.sendEmail(ctx, sacct.Email, "Your request to send ₦"+am+".00 to "+racct.Phone+" has been processed.")
+	err = s.sendEmail(ctx, sacct.Email, "Funds Transfer Alert", "Your request to send ₦"+am+".00 to "+racct.Phone+" has been processed.")
 	if err != nil {
 		logger.Errorf("An error occurred while to alert to sender")
 		return err

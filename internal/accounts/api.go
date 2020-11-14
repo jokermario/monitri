@@ -959,7 +959,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 					}
 					nairaAmount := payloadHold.Data.Amount / 100
 					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount)+".00, "
-					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, message)
+					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, "Account Funded", message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}
 			}

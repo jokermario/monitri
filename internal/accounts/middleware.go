@@ -138,19 +138,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 			token.Claims.(jwt.MapClaims)["userId"].(string),
 			token.Claims.(jwt.MapClaims)["email"].(string),
 			token.Claims.(jwt.MapClaims)["phone"].(string),
-			acc.TotpSecret,
-			acc.Firstname,
-			acc.Middlename,
-			acc.Lastname,
-			acc.Dob,
-			acc.Address,
-			acc.BankName,
-			acc.BankAccountNo,
-			acc.NOKFullname,
-			acc.NOKPhone,
-			acc.NOKEmail,
-			acc.NOKAddress,
-			acc.CurrentBalance)
+			acc.TotpSecret)
 		c.Request = c.Request.WithContext(ctx)
 		return nil
 	}
@@ -166,20 +154,7 @@ func handleToken(c *routing.Context, service2 Service, conn redis.Conn, token *j
 			token.Claims.(jwt.MapClaims)["refreshUUID"].(string),
 			token.Claims.(jwt.MapClaims)["userId"].(string),
 			token.Claims.(jwt.MapClaims)["email"].(string),
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			"",
-			0)
+			"", "")
 		c.Request = c.Request.WithContext(ctx)
 		return nil
 	}
@@ -194,8 +169,7 @@ const (
 )
 
 // WithUser returns a context that contains the accounts identity from the given JWT.
-func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, totp, firstname, middlename, lastname,
-	dob, address, bankname, bankacctno, nokfn, nokp, noke, noka string, currentBalance int) context.Context {
+func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, totp string) context.Context {
 	if accessUUID != "" {
 		return context.WithValue(ctx, userKey, entity.Accounts{
 			AccessUUID: accessUUID,
@@ -203,18 +177,6 @@ func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, to
 			Email: email,
 			Phone: phone,
 			TotpSecret: totp,
-			Firstname: firstname,
-			Middlename: middlename,
-			Lastname: lastname,
-			Dob: dob,
-			Address: address,
-			BankName: bankname,
-			BankAccountNo: bankacctno,
-			CurrentBalance: currentBalance,
-			NOKFullname: nokfn,
-			NOKPhone: nokp,
-			NOKEmail: noke,
-			NOKAddress: noka,
 		})
 	}
 	if refreshUUID != "" {
@@ -224,18 +186,6 @@ func WithUser(ctx context.Context, accessUUID, refreshUUID, id, email, phone, to
 			Email: email,
 			Phone: phone,
 			TotpSecret: totp,
-			Firstname: firstname,
-			Middlename: middlename,
-			Lastname: lastname,
-			Dob: dob,
-			Address: address,
-			BankName: bankname,
-			BankAccountNo: bankacctno,
-			CurrentBalance: currentBalance,
-			NOKFullname: nokfn,
-			NOKPhone: nokp,
-			NOKEmail: noke,
-			NOKAddress: noka,
 		})
 	}
 

@@ -1905,6 +1905,10 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		logger.Errorf("An error occurred while to convert the amount to string")
 		return err
 	}
+	if convertAmountToInt > sacct.CurrentBalance {
+		logger.Errorf("Amount to send is more than the current balance")
+		return errors.InternalServerError("AmountGreaterThanBalance")
+	}
 	sendersBalance := sacct.CurrentBalance - convertAmountToInt
 	receiversBalance := racct.CurrentBalance + convertAmountToInt
 

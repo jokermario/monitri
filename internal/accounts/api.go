@@ -1022,6 +1022,11 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Recipient phone number not found"}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("AmountGreaterThanBalance") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "The amount you want to send is more than your total balance"}, http.StatusInternalServerError)
 		}
 		return err
 	}

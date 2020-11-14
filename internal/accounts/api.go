@@ -1017,6 +1017,11 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Transaction pin mismatch"}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("ReceiverNotfound") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "Recipient phone number not found"}, http.StatusInternalServerError)
 		}
 		return err
 	}

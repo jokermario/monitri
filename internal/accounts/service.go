@@ -1879,7 +1879,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	racct, err := s.getAccountByPhone(ctx, req.ReceiverPhone)
 	if err != nil {
 		logger.Errorf("An error occurred while to retrieve receivers account with phone")
-		return err
+		return errors.InternalServerError("ReceiverNotfound")
 	}
 
 	//Senders account

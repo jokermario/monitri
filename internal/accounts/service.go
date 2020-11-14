@@ -1918,15 +1918,18 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	dbId := entity.GenerateID()
 
 	updateErr := s.repo.updateTwoAccountAndTransactionTableTrans(ctx, sacct.Accounts, racct.Accounts, entity.Transactions{
-		ID:             dbId,
-		AccountID:      sacct.ID,
-		TransactionID:  req.Reference,
-		Amount:         convertAmountToInt,
-		Currency:       "NGN",
-		Description:    req.Description,
-		RecipientEmail: racct.Email,
-		RecipientPhone: racct.Phone,
-		Status:         "debit",
+		ID:              dbId,
+		AccountID:       sacct.ID,
+		TransactionID:   req.Reference,
+		Amount:          convertAmountToInt,
+		Currency:        "NGN",
+		Description:     req.Description,
+		RecipientEmail:  racct.Email,
+		RecipientPhone:  racct.Phone,
+		Status:          "success",
+		TransactionType: "debit",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	})
 	if updateErr != nil {
 		logger.Errorf("An error occurred while to update the database during an internal transfer")
@@ -1935,13 +1938,13 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 
 	amountToNaira := convertAmountToInt / 100
 	am := strconv.Itoa(amountToNaira)
-	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "You have received "+am+", in your monitri platform")
+	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "Monitri\n\nAcctNo: "+racct.Phone+"\nAmount: ₦"+am+" CR\nDesc: From "+sacct.Firstname+" "+sacct.Lastname)
 	if !ok {
 		logger.Errorf("an error occurred while trying to send alert to receiver")
 		return nil
 	}
 
-	err = s.sendEmail(ctx, sacct.Email, "Your request to send "+am+" to "+racct.Phone+" has been processed.")
+	err = s.sendEmail(ctx, sacct.Email, "Your request to send ₦"+am+" to "+racct.Phone+" has been processed.")
 	if err != nil {
 		logger.Errorf("An error occurred while to alert to sender")
 		return err

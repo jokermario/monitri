@@ -1861,6 +1861,9 @@ func (s *service) initiateAddFundsTransaction(ctx context.Context, id string, re
 
 func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn, id string, req SendInternalFundsRequest) error {
 	logger := s.logger.With(ctx, "account", req.ReceiverPhone)
+	if err := req.validate(); err != nil {
+		return err
+	}
 	RandomCrypto, _ := rand.Prime(rand.Reader, 20)
 
 	transId := entity.GenerateID()

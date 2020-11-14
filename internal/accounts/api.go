@@ -238,7 +238,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"A 2FA must be set for the account",
 			}, http.StatusInternalServerError)
 		} else {
-			return errors.InternalServerError("An error occurred")
+			return err
 		}
 	}
 

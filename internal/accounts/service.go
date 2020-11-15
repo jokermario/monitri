@@ -930,6 +930,13 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 
 func (s *service) refreshToken(identity Identity, redisConn redis.Conn,
 	key string, tokenDetails *TokenDetails) (*TokenDetails, error) {
+	location, err := time.LoadLocation("Africa/Lagos")
+	if err != nil {
+		fmt.Println("could not set timeZone")
+		return nil, err
+	}
+	fmt.Println(time.Now())
+	fmt.Println(time.Now().In(location))
 	td := &TokenDetails{}
 	var accerr error
 	var referr error

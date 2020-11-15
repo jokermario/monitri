@@ -31,6 +31,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/email/token/<purpose>", res.sendEmailVeriToken)
 	r.Post("/new/account", res.createAccount(logger))
 	r.Post("/transaction/webhook", res.paystackWebhookForTransaction(logger))
+	r.Post("/test/decrypt/<hex>", res.decodeEncryption)
 
 	r.Use(authHandler)
 
@@ -58,7 +59,6 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/unset2fa/<passcode>/<authType>", res.unset2FA)
 	r.Post("/account/bankdetails", res.setBankDetails)
 	r.Post("/account/setuppin", res.setTransactionPin)
-	r.Post("/test/decrypt/<hex>", res.decodeEncryption)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("/transaction/initialize", res.initiatedTransaction)

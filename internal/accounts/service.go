@@ -1909,7 +1909,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	}
 
 	if sacct.ID == racct.ID {
-		logger.Errorf("You cannot to yourself")
+		logger.Errorf("You cannot transfer to yourself")
 		return errors.InternalServerError("TransferToSelf")
 	}
 
@@ -1921,6 +1921,10 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 	if convertAmountToFloat > sacct.CurrentBalance {
 		logger.Errorf("Amount to send is more than the current balance")
 		return errors.InternalServerError("AmountGreaterThanBalance")
+	}
+	if convertAmountToFloat <= 0 {
+		logger.Errorf("Amount to send is more cannot be zero or less")
+		return errors.InternalServerError("AmountZeroOrLess")
 	}
 	sendersBalance := sacct.CurrentBalance - convertAmountToFloat
 	receiversBalance := racct.CurrentBalance + convertAmountToFloat

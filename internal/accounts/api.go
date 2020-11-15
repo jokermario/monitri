@@ -157,7 +157,8 @@ func (r resource) unset2FA(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.unset2FA(rc.Request.Context(), identity.GetID(), identity.GetEmail(), rc.Param("passcode"), rc.Param("authType"))
 	if err != nil {
-		if err == errors.InternalServerError("settingsNotExist") {
+		switch err {
+		case errors.InternalServerError("settingsNotExist"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -165,7 +166,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"2FA has not been set",
 			}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("passcodeErr") {
+		case errors.InternalServerError("passcodeErr"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -173,7 +174,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"The passcode is not valid",
 			}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("TokenInvalid") {
+		case errors.InternalServerError("TokenInvalid"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -181,7 +182,7 @@ func (r resource) unset2FA(rc *routing.Context) error {
 				"failed",
 				"The token is invalid",
 			}, http.StatusInternalServerError)
-		} else {
+		default:
 			return errors.InternalServerError("An error occurred")
 		}
 	}
@@ -206,7 +207,8 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 
 	bankName, acctNo, err := r.service.setBankDetails(rc.Request.Context(), identity.GetEmail(), input)
 	if err != nil {
-		if err == errors.InternalServerError("settingsNotExist") {
+		switch err {
+		case errors.InternalServerError("settingsNotExist"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -214,7 +216,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"2FA has not been set",
 			}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("passcodeErr") {
+		case errors.InternalServerError("passcodeErr"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -222,7 +224,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"The passcode is not valid",
 			}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("TokenInvalid") {
+		case errors.InternalServerError("TokenInvalid"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -230,7 +232,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"The token is invalid",
 			}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("2FAMustBeSet") {
+		case errors.InternalServerError("2FAMustBeSet"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -238,7 +240,7 @@ func (r resource) setBankDetails(rc *routing.Context) error {
 				"failed",
 				"A 2FA must be set for the account",
 			}, http.StatusInternalServerError)
-		} else {
+		default:
 			return err
 		}
 	}
@@ -1063,28 +1065,35 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
 	err := r.service.sendFundsToUsersInternal(rc.Request.Context(), r.redisConn, identity.GetID(), req)
 	if err != nil {
-		if err == errors.InternalServerError("TransPinMismatch") {
+		switch err {
+		case errors.InternalServerError("TransPinMismatch"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Transaction pin mismatch"}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("ReceiverNotfound") {
+		case errors.InternalServerError("ReceiverNotfound"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Recipient phone number not found"}, http.StatusInternalServerError)
-		} else if err == errors.InternalServerError("AmountGreaterThanBalance") {
+		case errors.InternalServerError("AmountGreaterThanBalance"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "The amount you want to send is more than your total balance"}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("TransferToSelf") {
+		case errors.InternalServerError("TransferToSelf"):
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-			}{"failed", "cannot transfer to self"}, http.StatusInternalServerError)
+			}{"failed", "Cannot transfer to self"}, http.StatusInternalServerError)
+		case errors.InternalServerError("AmountZeroOrLess"):
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "Amount to send is more cannot be zero or less"}, http.StatusInternalServerError)
+		default:
+			return err
 		}
-		return err
 	}
 
 	return rc.WriteWithStatus(struct {

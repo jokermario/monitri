@@ -1090,7 +1090,7 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
-			}{"failed", "Amount to send is more cannot be zero or less"}, http.StatusInternalServerError)
+			}{"failed", "Amount to send cannot be zero or less"}, http.StatusInternalServerError)
 		default:
 			return err
 		}

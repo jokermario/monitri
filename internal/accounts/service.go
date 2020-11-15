@@ -904,24 +904,18 @@ func (s *service) changePassword(ctx context.Context, id, email string, req Chan
 }
 
 func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
-	location, err := time.LoadLocation("Africa/Lagos")
-	if err != nil {
-		fmt.Println("could not set timeZone")
-		return nil, err
-	}
-	fmt.Println(time.Now())
-	fmt.Println(time.Now().In(location))
+	//location, err := time.LoadLocation("Africa/Lagos")
+	//if err != nil {
+	//	fmt.Println("could not set timeZone")
+	//	return nil, err
+	//}
+
 	td := &TokenDetails{}
 	var accerr error
 	var referr error
 	td.AtExpires = time.Now().Add(time.Duration(s.AccessTokenExpiration) * time.Hour).Unix()
 	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
-	ex := time.Now().In(location).Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
-	fmt.Println(s.AccessTokenExpiration)
-	fmt.Println(s.RefreshTokenExpiration)
-	fmt.Println(td.AtExpires)
-	fmt.Println(td.RtExpires)
-	fmt.Println(ex)
+
 	td.AccessUUID = entity.GenerateID()
 	td.RefreshUUID = entity.GenerateID()
 
@@ -1912,6 +1906,11 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 			logger.Errorf("an error occurred while tyring to compare bcrypt trans pin with input trans pin")
 			return err
 		}
+	}
+
+	if sacct.ID == racct.ID {
+		logger.Errorf("You cannot to yourself")
+		return errors.InternalServerError("TransferToSelf")
 	}
 
 	convertAmountToInt, err := strconv.Atoi(req.Amount)

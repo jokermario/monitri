@@ -31,7 +31,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/email/token/<purpose>", res.sendEmailVeriToken)
 	r.Post("/new/account", res.createAccount(logger))
 	r.Post("/transaction/webhook", res.paystackWebhookForTransaction(logger))
-	r.Post("/test/decrypt/<hex>", res.decodeEncryption)
+	//r.Post("/test/decrypt/<hex>", res.decodeEncryption)
 
 	r.Use(authHandler)
 
@@ -671,18 +671,22 @@ func (r resource) logout(rc *routing.Context) error {
 
 func (r resource) refreshToken(rc *routing.Context) error {
 	identity := CurrentAccount(rc.Request.Context())
+
 	userIdentity := r.service.getAccountIDEmailPhone(rc.Request.Context(), identity.GetID())
 	if userIdentity == nil {
 		return errors.BadRequest("The refresh token is not valid")
 	}
+
 	tokenDetails, err := r.service.generateTokens(userIdentity)
 	if err != nil {
 		return errors.InternalServerError("a problem occurred while trying to generate a new access token")
 	}
+
 	TokenDetails, refErr := r.service.refreshToken(userIdentity, r.redisConn, identity.GetEmail(), tokenDetails)
 	if refErr != nil {
 		return errors.InternalServerError("an error occurred while storing the refresh token")
 	}
+
 	//encrypt access and refresh token
 	encAccessToken, err := r.service.aesEncrypt(TokenDetails.AccessToken)
 	if err != nil {
@@ -692,6 +696,7 @@ func (r resource) refreshToken(rc *routing.Context) error {
 	if err != nil {
 		return errors.InternalServerError("")
 	}
+
 	//deletes the refresh token from redis
 	_ = r.service.logOut(rc.Request.Context(), r.redisConn, identity.GetRefreshID())
 
@@ -920,6 +925,25 @@ func (r resource) setTransactionPin(rc *routing.Context) error {
 	}{"success", "pin set successfully"}, http.StatusOK)
 }
 
+//Only Uncomment during testing
+//func (r resource) decodeEncryption(rc *routing.Context) error {
+//	hexToByte, err := hex.DecodeString(rc.Param("hex"))
+//	if err != nil {
+//		return err
+//	}
+//
+//	Tbyte, err := r.service.aesDecrypt(string(hexToByte))
+//	if err != nil {
+//		return err
+//	}
+//
+//	return rc.WriteWithStatus(struct {
+//		Status  string `json:"status"`
+//		Message string `json:"message"`
+//		Data    string `json:"data"`
+//	}{"success", "processed successfully", string(Tbyte)}, http.StatusOK)
+//}
+
 //------------------------------------------------------TRANSACTION-----------------------------------------------------
 
 func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handler {
@@ -1053,6 +1077,11 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "The amount you want to send is more than your total balance"}, http.StatusInternalServerError)
+		}else if err == errors.InternalServerError("TransferToSelf") {
+			return rc.WriteWithStatus(struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}{"failed", "cannot transfer to self"}, http.StatusInternalServerError)
 		}
 		return err
 	}
@@ -1060,23 +1089,6 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 	return rc.WriteWithStatus(struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
-	}{"success", "processed successfully"}, http.StatusInternalServerError)
+	}{"success", "processed successfully"}, http.StatusOK)
 }
 
-func (r resource) decodeEncryption(rc *routing.Context) error {
-	hexToByte, err := hex.DecodeString(rc.Param("hex"))
-	if err != nil {
-		return err
-	}
-
-	Tbyte, err := r.service.aesDecrypt(string(hexToByte))
-	if err != nil {
-		return err
-	}
-
-	return rc.WriteWithStatus(struct {
-		Status  string `json:"status"`
-		Message string `json:"message"`
-		Data    string `json:"data"`
-	}{"success", "processed successfully", string(Tbyte)}, http.StatusOK)
-}

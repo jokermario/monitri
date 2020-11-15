@@ -58,6 +58,7 @@ func RegisterHandlers(r *routing.RouteGroup, service2 Service, AccessTokenSignin
 	r.Post("/account/unset2fa/<passcode>/<authType>", res.unset2FA)
 	r.Post("/account/bankdetails", res.setBankDetails)
 	r.Post("/account/setuppin", res.setTransactionPin)
+	r.Post("/test/decrypt/<hex>", res.decodeEncryption)
 
 	//-------------------------------------------------TRANSACTION ENDPOINTS------------------------------------------------
 	r.Post("/transaction/initialize", res.initiatedTransaction)
@@ -702,20 +703,45 @@ func (r resource) refreshToken(rc *routing.Context) error {
 		vComp = "yes"
 	}
 
+	acct, err := r.service.getAccountByEmail(rc.Request.Context(), identity.GetEmail())
+	if err != nil {
+		return rc.Write(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		}{"failed", "Account info failed. The error: " + err.Error()})
+	}
+
+	var accountDetails AccountDetails
+	accountDetails.Firstname = acct.Firstname
+	accountDetails.Middlename = acct.Middlename
+	accountDetails.Lastname = acct.Lastname
+	accountDetails.Dob = acct.Dob
+	accountDetails.Phone = acct.Phone
+	accountDetails.Address = acct.Address
+	accountDetails.Email = acct.Email
+	accountDetails.BankName = acct.BankName
+	accountDetails.BankAccountNo = acct.BankAccountNo
+	accountDetails.CurrentBalance = acct.CurrentBalance
+	accountDetails.NOKFullname = acct.NOKFullname
+	accountDetails.NOKPhone = acct.NOKPhone
+	accountDetails.NOKEmail = acct.NOKEmail
+	accountDetails.NOKAddress = acct.NOKAddress
+
 	type data struct {
 		//TokenType    string `json:"token_type"`
-		Email                 string `json:"email"`
-		CompletedVerification string `json:"completed_verification"`
-		AccessToken           string `json:"access_token"`
-		ExpiryTime            int64  `json:"expires"`
-		RefreshToken          string `json:"refresh_token"`
+		Email                 string         `json:"email"`
+		CompletedVerification string         `json:"completed_verification"`
+		AccessToken           string         `json:"access_token"`
+		ExpiryTime            int64          `json:"expires"`
+		RefreshToken          string         `json:"refresh_token"`
+		AccountInfo           AccountDetails `json:"account_info"`
 	}
 	return rc.Write(struct {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 		Data    data   `json:"data,omitempty"`
 	}{"success", "tokens generated", data{identity.GetEmail(), vComp, hex.EncodeToString(encAccessToken), TokenDetails.AtExpires,
-		hex.EncodeToString(encRefreshToken)}})
+		hex.EncodeToString(encRefreshToken), accountDetails}})
 }
 
 func (r resource) sendEmailVeriToken(rc *routing.Context) error {
@@ -958,7 +984,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 						return errors2.New("failed to update the transaction and current balance")
 					}
 					nairaAmount := payloadHold.Data.Amount / 100
-					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount)+".00, "
+					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount) + ".00, "
 					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, "Account Funded", message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}
@@ -1017,12 +1043,12 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Transaction pin mismatch"}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("ReceiverNotfound") {
+		} else if err == errors.InternalServerError("ReceiverNotfound") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
 			}{"failed", "Recipient phone number not found"}, http.StatusInternalServerError)
-		}else if err == errors.InternalServerError("AmountGreaterThanBalance") {
+		} else if err == errors.InternalServerError("AmountGreaterThanBalance") {
 			return rc.WriteWithStatus(struct {
 				Status  string `json:"status"`
 				Message string `json:"message"`
@@ -1035,4 +1061,22 @@ func (r resource) sendMoneyInternal(rc *routing.Context) error {
 		Status  string `json:"status"`
 		Message string `json:"message"`
 	}{"success", "processed successfully"}, http.StatusInternalServerError)
+}
+
+func (r resource) decodeEncryption(rc *routing.Context) error {
+	hexToByte, err := hex.DecodeString(rc.Param("hex"))
+	if err != nil {
+		return err
+	}
+
+	Tbyte, err := r.service.aesDecrypt(string(hexToByte))
+	if err != nil {
+		return err
+	}
+
+	return rc.WriteWithStatus(struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+		Data    string `json:"data"`
+	}{"success", "processed successfully", string(Tbyte)}, http.StatusOK)
 }

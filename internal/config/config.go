@@ -38,9 +38,9 @@ type Config struct {
 	// JWT refresh token signing key. required.
 	RefreshTokenSigningKey string `yaml:"jwt_refresh_token_signing_key" env:"JWT_REFRESH_TOKEN_SIGNING_KEY,secret"`
 	// JWT access token expiration in hours. Defaults to 5 hours
-	AccessTokenExpiration int `yaml:"access_token_expiration" env:"JWT_EXPIRATION"`
+	AccessTokenExpiration int `yaml:"access_token_expiration" env:"ACCESS_TOKEN_EXPIRATION"`
 	// JWT refresh token expiration in hours. Defaults to 72 hours (3 days)
-	RefreshTokenExpiration int `yaml:"refresh_token_expiration" env:"JWT_EXPIRATION"`
+	RefreshTokenExpiration int `yaml:"refresh_token_expiration" env:"REFRESH_TOKEN_EXPIRATION"`
 	//the data source name for connecting to redis
 	RedisDSN string `yaml:"redis_dsn" env:"REDIS_DSN"`
 	//SMS Api Url

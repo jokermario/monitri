@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	errors2 "errors"
+	"fmt"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jokermario/monitri/internal/errors"
@@ -11,7 +12,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -993,7 +993,7 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 				}
 
 				//increment the current balance
-				currentBalance := acct.CurrentBalance + payloadHold.Data.Amount
+				currentBalance := acct.CurrentBalance + float64(payloadHold.Data.Amount)
 
 				if payloadHold.Data.Status != "success" {
 					logger.Error("trans not success")
@@ -1003,12 +1003,13 @@ func (r resource) paystackWebhookForTransaction(logger log.Logger) routing.Handl
 				if transInfo.TransactionType == "" {
 					if err := r.service.updateTrans(rc.Request.Context(), acct.ID, payloadHold.Data.Reference,
 						payloadHold.Data.Status, "credit", payloadHold.Data.Currency, string(payloadAsString),
-						payloadHold.Data.Amount, currentBalance); err != nil {
+						float64(payloadHold.Data.Amount), currentBalance); err != nil {
 						logger.Errorf("failed to update the transaction and current balance: %s", err)
 						return errors2.New("failed to update the transaction and current balance")
 					}
-					nairaAmount := payloadHold.Data.Amount / 100
-					message := "Your account has just been funded with a sum of ₦" + strconv.Itoa(nairaAmount) + ".00, "
+					nairaAmount := float64(payloadHold.Data.Amount) / 100
+					nairaAmountToString := fmt.Sprintf("%.2f", nairaAmount)
+					message := "Your account has just been funded with a sum of NGN" + nairaAmountToString
 					_ = r.service.sendEmail(rc.Request.Context(), acct.Email, "Account Funded", message)
 					return rc.WriteWithStatus("", http.StatusOK)
 				}

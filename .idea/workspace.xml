@@ -21,8 +21,9 @@
   <component name="ChangeListManager">
     <list default="true" id="25f019c0-46d1-4629-8d61-4afa3dd8ce90" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/internal/accounts/api.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/api.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/internal/accounts/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/accounts/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/account.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/account.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/internal/entity/transaction.go" beforeDir="false" afterPath="$PROJECT_DIR$/internal/entity/transaction.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -275,10 +276,10 @@
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
     <state x="-1828" y="92" width="1736" height="896" key="dock-window-8/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1603966188490" />
-    <state x="-1550" y="231" width="648" height="849" key="find.popup" timestamp="1604309848523">
+    <state x="-1550" y="231" width="648" height="849" key="find.popup" timestamp="1605451076224">
       <screen x="-1920" y="0" width="1920" height="1080" />
     </state>
-    <state x="-1550" y="231" width="648" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1604309848523" />
+    <state x="-1550" y="231" width="648" height="849" key="find.popup/-1920.0.1920.1080/0.0.1920.1080@-1920.0.1920.1080" timestamp="1605451076224" />
     <state x="370" y="231" width="583" height="849" key="find.popup/-3000.0.1920.1080/-1080.0.1080.1920/0.0.1920.1080@0.0.1920.1080" timestamp="1600679005176" />
     <state x="668" y="257" width="583" height="624" key="find.popup/0.0.1920.1080@0.0.1920.1080" timestamp="1599470533407" />
     <state x="785" y="299" key="refactoring.ChangeSignatureDialog" timestamp="1601189888987">

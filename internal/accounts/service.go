@@ -75,7 +75,7 @@ type Service interface {
 	getTransactionByTransRef(ctx context.Context, transRef string) (Transaction, error)
 	//getLatestTransactionInfo(ctx context.Context, accountId string) (Transaction, error)
 	createAddFundsTrans(ctx context.Context, id, transRef string) error
-	updateTrans(ctx context.Context, id, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error
+	updateTrans(ctx context.Context, id, transRef, status, transType, currency, requestPayload string, amount, currentBalance float64) error
 	webHookValid(payload, payStackSig string) bool
 	verifyOnPaystack(transRef string) bool
 	initiateAddFundsTransaction(ctx context.Context, id string, req InitiateTransactionRequest) ([]byte, error)
@@ -105,7 +105,7 @@ type Identity interface {
 	GetAddress() string
 	GetBankName() string
 	GetBankAccountNo() string
-	GetCurrentBalance() int
+	GetCurrentBalance() float64
 	GetNOKFullname() string
 	GetNOKPhone() string
 	GetNOKEmail() string
@@ -133,20 +133,20 @@ type Account struct {
 
 //AccountDetails represents an account detail
 type AccountDetails struct {
-	Firstname      string `json:"firstname,omitempty"`
-	Middlename     string `json:"middlename,omitempty"`
-	Lastname       string `json:"lastname,omitempty"`
-	Dob            string `json:"dob,omitempty"`
-	Email          string `json:"email,omitempty"`
-	Address        string `json:"address,omitempty"`
-	Phone          string `json:"phone,omitempty"`
-	BankAccountNo  string `json:"bank_account_no,omitempty"`
-	BankName       string `json:"bank_name,omitempty"`
-	CurrentBalance int    `json:"current_balance"`
-	NOKFullname    string `json:"nok_fullname,omitempty"`
-	NOKPhone       string `json:"nok_phone,omitempty"`
-	NOKEmail       string `json:"nok_email,omitempty"`
-	NOKAddress     string `json:"nok_address,omitempty"`
+	Firstname      string  `json:"firstname,omitempty"`
+	Middlename     string  `json:"middlename,omitempty"`
+	Lastname       string  `json:"lastname,omitempty"`
+	Dob            string  `json:"dob,omitempty"`
+	Email          string  `json:"email,omitempty"`
+	Address        string  `json:"address,omitempty"`
+	Phone          string  `json:"phone,omitempty"`
+	BankAccountNo  string  `json:"bank_account_no,omitempty"`
+	BankName       string  `json:"bank_name,omitempty"`
+	CurrentBalance float64 `json:"current_balance"`
+	NOKFullname    string  `json:"nok_fullname,omitempty"`
+	NOKPhone       string  `json:"nok_phone,omitempty"`
+	NOKEmail       string  `json:"nok_email,omitempty"`
+	NOKAddress     string  `json:"nok_address,omitempty"`
 }
 
 //Setting represents a setting entity
@@ -1759,7 +1759,7 @@ func (s *service) createAddFundsTrans(ctx context.Context, accID, transRef strin
 	return nil
 }
 
-func (s *service) updateTrans(ctx context.Context, acctID, transRef, status, transType, currency, requestPayload string, amount, currentBalance int) error {
+func (s *service) updateTrans(ctx context.Context, acctID, transRef, status, transType, currency, requestPayload string, amount, currentBalance float64) error {
 	logger := s.logger.With(ctx, "transaction", transRef)
 	trans, err := s.getTransactionByTransRef(ctx, transRef)
 	if err != nil {
@@ -1913,17 +1913,17 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		return errors.InternalServerError("TransferToSelf")
 	}
 
-	convertAmountToInt, err := strconv.Atoi(req.Amount)
+	convertAmountToFloat, err := strconv.ParseFloat(req.Amount, 64)
 	if err != nil {
-		logger.Errorf("An error occurred while to convert the amount to string")
+		logger.Errorf("An error occurred while to convert the amount to float")
 		return err
 	}
-	if convertAmountToInt > sacct.CurrentBalance {
+	if convertAmountToFloat > sacct.CurrentBalance {
 		logger.Errorf("Amount to send is more than the current balance")
 		return errors.InternalServerError("AmountGreaterThanBalance")
 	}
-	sendersBalance := sacct.CurrentBalance - convertAmountToInt
-	receiversBalance := racct.CurrentBalance + convertAmountToInt
+	sendersBalance := sacct.CurrentBalance - convertAmountToFloat
+	receiversBalance := racct.CurrentBalance + convertAmountToFloat
 
 	sacct.CurrentBalance = sendersBalance
 	racct.CurrentBalance = receiversBalance
@@ -1934,7 +1934,7 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		ID:              dbId,
 		AccountID:       sacct.ID,
 		TransactionID:   req.Reference,
-		Amount:          convertAmountToInt,
+		Amount:          convertAmountToFloat,
 		Currency:        "NGN",
 		Description:     req.Description,
 		RecipientEmail:  racct.Email,
@@ -1949,16 +1949,16 @@ func (s *service) sendFundsToUsersInternal(ctx context.Context, conn redis.Conn,
 		return err
 	}
 
-	amountToNaira := convertAmountToInt / 100
-	currentBalanceToString := strconv.Itoa(racct.CurrentBalance / 100)
-	am := strconv.Itoa(amountToNaira)
-	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "Monitri\n\nAcctNo: "+racct.Phone+"\nAmount: NGN"+am+".00 CR\nDesc: From "+sacct.Firstname+" "+sacct.Lastname+"\nTran-id: "+req.Reference+"\nBal: NGN"+currentBalanceToString+".00")
+	amountToNaira := convertAmountToFloat / 100
+	currentBalanceToString := fmt.Sprintf("%.2f", racct.CurrentBalance/100)
+	am := fmt.Sprintf("%.2f", amountToNaira)
+	ok, _ := s.phoneVeriService.SendSMSToMobile(racct.Phone, "Monitri\n\nAcctNo: "+racct.Phone+"\nAmount: NGN"+am+" CR\nDesc: From "+sacct.Firstname+" "+sacct.Lastname+"\nTran-id: "+req.Reference+"\nBal: NGN"+currentBalanceToString)
 	if !ok {
 		logger.Errorf("an error occurred while trying to send alert to receiver")
 		return nil
 	}
 
-	err = s.sendEmail(ctx, sacct.Email, "Funds Transfer Alert", "Your request to send ₦"+am+".00 to "+racct.Phone+" has been processed.")
+	err = s.sendEmail(ctx, sacct.Email, "Funds Transfer Alert", "Your request to send ₦"+am+" to "+racct.Phone+" has been processed.")
 	if err != nil {
 		logger.Errorf("An error occurred while to alert to sender")
 		return err

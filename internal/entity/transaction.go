@@ -9,7 +9,7 @@ type Transactions struct {
 	ID                  string    `json:"-"`
 	AccountID           string    `json:"account_id"`
 	TransactionID       string    `json:"transaction_id"`
-	Amount              int       `json:"amount"`
+	Amount              float64       `json:"amount"`
 	TransactionHash     string    `json:"transaction_hash"`
 	Status              string    `json:"status"`
 	TransactionType     string    `json:"transaction_type"`

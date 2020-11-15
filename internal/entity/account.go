@@ -22,8 +22,8 @@ type Accounts struct {
 	BankAccountNo      string    `json:"bank_account_no,omitempty"`
 	BankName           string    `json:"bank_name,omitempty"`
 	RecipientCode      string    `json:"recipient_code"`
-	TransactionPin     string       `json:"-"`
-	CurrentBalance     int       `json:"current_balance"`
+	TransactionPin     string    `json:"-"`
+	CurrentBalance     float64   `json:"current_balance"`
 	NOKFullname        string    `json:"nok_fullname,omitempty"`
 	NOKPhone           string    `json:"nok_phone,omitempty"`
 	NOKEmail           string    `json:"nok_email,omitempty"`
@@ -116,7 +116,7 @@ func (a Accounts) GetBankAccountNo() string {
 }
 
 // GetBankAccountNo returns the accounts bankAcctNo.
-func (a Accounts) GetCurrentBalance() int {
+func (a Accounts) GetCurrentBalance() float64 {
 	return a.CurrentBalance
 }
 

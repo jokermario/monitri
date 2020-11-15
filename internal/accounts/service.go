@@ -917,6 +917,7 @@ func (s *service) generateTokens(identity Identity) (*TokenDetails, error) {
 	td.AtExpires = time.Now().Add(time.Duration(s.AccessTokenExpiration) * time.Hour).Unix()
 	td.RtExpires = time.Now().Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
 	ex := time.Now().In(location).Add(time.Duration(s.RefreshTokenExpiration) * time.Hour).Unix()
+	fmt.Println(td.AtExpires)
 	fmt.Println(td.RtExpires)
 	fmt.Println(ex)
 	td.AccessUUID = entity.GenerateID()
